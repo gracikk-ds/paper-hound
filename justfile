@@ -6,24 +6,22 @@ list:
     @just --list
 
 # Run all the formatting, linting, and testing commands
-qa:
-    uv run --python=3.13 --extra test ruff format .
-    uv run --python=3.13 --extra test ruff check . --fix
-    uv run --python=3.13 --extra test ruff check --select I --fix .
-    uv run --python=3.13 --extra test ty check .
-    uv run --python=3.13 --extra test pytest .
+lint:
+    ruff format .
+    ruff check . --fix
+    ty check .
 
 
 # Run all the tests, but allow for arguments to be passed
 test *ARGS:
     @echo "Running with arg: {{ARGS}}"
-    uv run --python=3.13 --extra test pytest {{ARGS}}
+    pytest {{ARGS}}
 
 # Run coverage, and build to HTML
 coverage:
-    uv run --python=3.13 --extra test coverage run -m pytest .
-    uv run --python=3.13 --extra test coverage report -m
-    uv run --python=3.13 --extra test coverage html
+    coverage run -m pytest .
+    coverage report -m
+    coverage html
 
 # Build the project, useful for checking that packaging is correct
 build:

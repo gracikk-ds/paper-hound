@@ -44,7 +44,10 @@ license = {text = "MIT"}
 # Core Dependencies
 dependencies = [
     "fastapi==0.116.2",
+    "loguru>=0.7.3",
     "pre-commit>=4.3.0",
+    "pydantic>=2.11.9",
+    "pydantic-settings>=2.10.1",
     "qdrant-client==1.15.1",
     "sentence-transformers==5.0.0",
     "uvicorn==0.35.0",
@@ -96,14 +99,12 @@ ignore = [
     "PGH", # pygrep-hooks
 
     # disable these rules to use the ruff formatter.
-    "COM812", # missing-trailing-comma
     "COM819", # prohibited-trailing-comma
     "D206",   # docstring-tab-indentation
     "D300",   # triple-single-quotes
     "E111",   # indentation-with-invalid-multiple
     "E114",   # indentation-with-invalid-multiple-comment
     "E117",   # over-indented
-    "E501",   # line-too-long
     "Q000",   # bad-quotes-inline-string
     "Q001",   # bad-quotes-multiline-string
     "Q002",   # bad-quotes-docstring
