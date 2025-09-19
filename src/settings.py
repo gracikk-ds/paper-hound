@@ -22,5 +22,12 @@ class Settings(BaseSettings):
     embedding_service_device: str = Field("cpu", description="The device for the embedding service")
     embedding_service_batch_size: int = Field(32, description="The batch size for the embedding service")
 
+    notion_token: str = Field(..., description="Notion API token.")
+    site_reports_dir: str = Field("site/_reports", description="Site reports directory.")
+    aws_access_key_id: str = Field(..., description="AWS access key ID.")
+    aws_secret_access_key: str = Field(..., description="AWS secret access key.")
+    endpoint_url: str = Field(..., description="AWS endpoint URL.")
+    s3_bucket: str = Field(..., description="S3 bucket name.")
+
 
 settings = Settings()  # type: ignore

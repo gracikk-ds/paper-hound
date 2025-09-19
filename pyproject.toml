@@ -44,6 +44,7 @@ license = {text = "MIT"}
 # Core Dependencies
 dependencies = [
     "arxiv==2.2.0",
+    "boto3>=1.40.34",
     "dependency-injector>=4.48.2",
     "fastapi==0.116.2",
     "gunicorn>=23.0.0",
