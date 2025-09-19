@@ -60,6 +60,11 @@ dependencies = [
     "starlette-context>=0.4.0",
     "tqdm>=4.67.1",
     "uvicorn==0.35.0",
+    "google-cloud-aiplatform==1.71.1",
+    "google-cloud-storage==2.1.0",
+    "google-genai==1.16.1",
+    "google_cloud_resource_manager==1.6.1",
+    "grpcio_status==1.49.0rc1",
 ]
 
 [project.optional-dependencies]
@@ -119,6 +124,12 @@ ignore = [
     "Q002",   # bad-quotes-docstring
     "Q003",   # avoidable-escaped-quote
     "W191",   # tab-indentation
+    "PTH103", # path-concatenation
+    "PTH118", # path-concatenation
+    "PTH123", # open file with Path
+    "PTH119", # replace os.basename with Path.stem
+    "PTH120", # replace os.path.dirname with Path.parent
+    "PTH110", # one more pathlib related rule
 ]
 task-tags = ["TODO", "FIXME", "XXX", "HACK"]
 
