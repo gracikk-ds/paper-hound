@@ -1,13 +1,16 @@
 """Settings for the application."""
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-class QdrantConnectionConfig(BaseSettings):
-    """Configuration for Qdrant connection."""
+class Settings(BaseSettings):
+    """Settings for the application."""
 
-    model_config = SettingsConfigDict(env_prefix="QDRANT_")
+    model_config = SettingsConfigDict(env_prefix="PAPER_HOUND_")
 
-    host: str = "localhost"
-    port: int = 6333
-    api_key: str | None = None
+    api_name = Field(..., default="Paper Hound API")
+    api_version = Field(..., default="0.1.0")
+
+
+settings = Settings()

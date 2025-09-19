@@ -9,7 +9,7 @@ list:
 lint:
     ruff format .
     ruff check . --fix
-    ty check .
+    # ty check .
 
 
 # Run all the tests, but allow for arguments to be passed

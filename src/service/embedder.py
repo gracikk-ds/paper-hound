@@ -7,13 +7,17 @@ from sentence_transformers import SentenceTransformer
 class EmbeddingService:
     """Thin wrapper over SentenceTransformer for deterministic embeddings."""
 
-    def __init__(self, model_name: str = "Qwen/Qwen3-Embedding-4B") -> None:
+    def __init__(self, model_name: str = "Qwen/Qwen3-Embedding-4B", device: str = "cpu", batch_size: int = 32) -> None:
         """Initialize the embedding service.
 
         Args:
             model_name (str): The name of the model to use for embedding.
+            device (str): The device to use for embedding.
+            batch_size (int): The batch size to use for embedding.
         """
-        self.model = SentenceTransformer(model_name)
+        self.batch_size = batch_size
+        self.model_name = model_name
+        self.model = SentenceTransformer(model_name, device=device)
 
     def embed_text(self, text: str) -> list[float]:
         """Embed a single text.
@@ -39,7 +43,7 @@ class EmbeddingService:
         Returns:
             list[list[float]]: The embedding vectors as a list of list of floats.
         """
-        vectors = self.model.encode(list(texts), normalize_embeddings=True)
+        vectors = self.model.encode(texts, normalize_embeddings=True, batch_size=self.batch_size)
         if isinstance(vectors, np.ndarray):
             return vectors.astype(float).tolist()
         return [[float(v) for v in vec] for vec in vectors]  # type: ignore

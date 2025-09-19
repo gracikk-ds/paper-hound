@@ -1,15 +1,15 @@
 """Qdrant vector store wrapper and collection setup."""
 
 import itertools
+import uuid
 from collections.abc import Iterable
-from typing import Any
 
 from loguru import logger
 from qdrant_client import QdrantClient
 from qdrant_client import models as qmodels
 from qdrant_client.http.exceptions import UnexpectedResponse
 
-from src.settings import QdrantConnectionConfig
+from src.utils.schemas import Paper, QdrantConnectionConfig
 
 
 class QdrantVectorStore:
@@ -98,7 +98,7 @@ class QdrantVectorStore:
         self,
         ids: Iterable[str],
         vectors: Iterable[list[float]],
-        payloads: Iterable[dict[str, Any]],
+        payloads: Iterable[Paper],
         batch_size: int = 256,
     ) -> None:
         """Upserts points into Qdrant in memory-efficient batches from iterators.
@@ -106,12 +106,14 @@ class QdrantVectorStore:
         Args:
             ids (Iterable[str]): An iterator of point IDs.
             vectors (Iterable[list[float]]): An iterator of vectors.
-            payloads (Iterable[dict[str, Any]]): An iterator of payloads.
+            payloads (Iterable[Paper]): An iterator of payloads.
             batch_size (int): The number of points to send in each batch.
         """
+        self.ensure_collection()
+        uuid_ids = [str(uuid.uuid5(uuid.NAMESPACE_URL, id_val)) for id_val in ids]
         points_iter = (
-            qmodels.PointStruct(id=id_val, vector=vec, payload=pay)
-            for id_val, vec, pay in zip(ids, vectors, payloads, strict=True)
+            qmodels.PointStruct(id=uuid_id, vector=vec, payload=pay.model_dump())
+            for uuid_id, vec, pay in zip(uuid_ids, vectors, payloads, strict=True)
         )
 
         batch_num = 0
@@ -148,6 +150,7 @@ class QdrantVectorStore:
         Returns:
             A list of scored points, or an empty list if an error occurs.
         """
+        self.ensure_collection()
         try:
             return self.client.search(
                 collection_name=self.collection,
@@ -158,3 +161,109 @@ class QdrantVectorStore:
         except Exception as exp:  # noqa: BLE001
             logger.error(f"An error occurred during search: {exp}")
             return []
+
+    def retrieve(self, ids: list[str] | str) -> list[qmodels.Record] | qmodels.Record:
+        """Retrieve points from the vector store by their IDs.
+
+        Args:
+            ids (list[str] | str): The ID or IDs of the points to retrieve.
+
+        Returns:
+            list[qmodels.Record] | qmodels.Record: A list of records or a single record.
+        """
+        self.ensure_collection()
+        is_single_id = isinstance(ids, str)
+        point_ids: list[str] = [ids] if is_single_id else ids  # type: ignore
+        point_ids = [str(uuid.uuid5(uuid.NAMESPACE_URL, id_val)) for id_val in point_ids]
+
+        try:
+            # Fetch records with full data (payload and vector).
+            records = self.client.retrieve(
+                collection_name=self.collection,
+                ids=point_ids,
+                with_payload=True,
+                with_vectors=False,
+            )
+        except Exception as exp:  # noqa: BLE001
+            logger.error(f"An error occurred during retrieval for IDs {ids}: {exp}")
+            return []
+        if is_single_id:
+            return records[0] if records else []
+        return records
+
+    def delete(self, ids: list[str] | str) -> None:
+        """Delete one or more points from the vector store by their IDs.
+
+        Args:
+            ids (list[str] | str): The ID or IDs of the points to delete.
+        """
+        self.ensure_collection()
+        point_ids: list[str] = [ids] if isinstance(ids, str) else ids  # type: ignore
+        point_ids = [str(uuid.uuid5(uuid.NAMESPACE_URL, id_val)) for id_val in point_ids]
+
+        if not point_ids:
+            logger.warning("Delete operation called with no IDs.")
+            return
+
+        try:
+            logger.info(f"Deleting {len(point_ids)} points from '{self.collection}'.")
+            self.client.delete(
+                collection_name=self.collection,
+                points_selector=qmodels.PointIdsList(points=point_ids),  # type: ignore
+                wait=True,  # Wait for the operation to complete.
+            )
+            logger.info(f"Successfully deleted points: {point_ids}")
+        except Exception as exp:  # noqa: BLE001
+            logger.error(f"Failed to delete points with IDs {point_ids}: {exp}")
+
+    def count(self) -> int:
+        """Count the total number of points in the collection.
+
+        Returns:
+            int: The number of points in the collection. Returns 0 on error.
+        """
+        self.ensure_collection()
+        try:
+            count_result = self.client.count(
+                collection_name=self.collection,
+                exact=True,  # Get the exact count.
+            )
+        except Exception as exp:  # noqa: BLE001
+            logger.error(f"Failed to count points in collection '{self.collection}': {exp}")
+            return 0
+        return count_result.count
+
+    def get_vector(self, ids: str | list[str]) -> list[float] | list[list[float]]:
+        """Get the vector(s) for the given point ID(s).
+
+        Args:
+            ids (str | list[str]): The ID or list of IDs of the points.
+
+        Returns:
+            list[float] | list[list[float]]: A single vector or a list of vectors.
+        """
+        self.ensure_collection()
+        is_single_id = isinstance(ids, str)
+        point_ids: list[str] = [ids] if is_single_id else ids  # type: ignore
+        point_ids = [str(uuid.uuid5(uuid.NAMESPACE_URL, id_val)) for id_val in point_ids]
+
+        try:
+            # Retrieve points with vectors but without payloads for efficiency.
+            records = self.client.retrieve(
+                collection_name=self.collection,
+                ids=point_ids,
+                with_payload=False,
+                with_vectors=True,
+            )
+        except Exception as exp:  # noqa: BLE001
+            logger.error(f"An error occurred while getting vectors for IDs {ids}: {exp}")
+            return []
+
+        # The vector can be None if it's not stored for a point
+        vectors: list[list[float]] = [rec.vector for rec in records if rec.vector is not None]  # type: ignore
+
+        if not vectors:
+            logger.warning(f"No vectors found for any ID in: {point_ids}")
+            return []
+
+        return vectors[0] if is_single_id else vectors
