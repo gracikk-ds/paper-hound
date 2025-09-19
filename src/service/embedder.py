@@ -1,6 +1,7 @@
 """Embedding service using sentence-transformers."""
 
 import numpy as np
+from loguru import logger
 from sentence_transformers import SentenceTransformer
 
 
@@ -18,6 +19,7 @@ class EmbeddingService:
         self.batch_size = batch_size
         self.model_name = model_name
         self.model = SentenceTransformer(model_name, device=device)
+        logger.info(f"Initialized embedding service with model {model_name} and device {device}")
 
     def embed_text(self, text: str) -> list[float]:
         """Embed a single text.

@@ -3,13 +3,15 @@
 import traceback
 from typing import Any
 
+from fastapi import Request
 from fastapi.responses import JSONResponse
 
 
-async def handle_unexpected_exception(*, exception: Exception, **_: Any) -> JSONResponse:
+async def handle_unexpected_exception(request: Request, exception: Exception, **_: Any) -> JSONResponse:  # noqa: ARG001
     """Handle unexpected exceptions.
 
     Args:
+        request (Request): The request object.
         exception (Exception): The exception object.
 
     Returns:
