@@ -60,7 +60,6 @@ class ArxivFetcher:
         """
         category_clauses = [f"cat:{cat}" for cat in categories]
         query = f"({' OR '.join(category_clauses)})"
-        end_date = end_date + timedelta(days=1) - timedelta(seconds=1)
         start = start_date.strftime("%Y%m%d%H%M%S")
         end = end_date.strftime("%Y%m%d%H%M%S")
         date_clause = f" AND submittedDate:[{start} TO {end}]"
@@ -231,14 +230,32 @@ class ArxivFetcher:
 def fetch_papers_in_chunks(
     start_date_str: str,
     end_date_str: str,
+    collection_start_date_str: str | None = None,
+    collection_end_date_str: str | None = None,
     categories: list[str] | None = None,
 ) -> list[Paper]:
-    """Fetches papers by breaking the date range into daily chunks to avoid API limitations."""
+    """Fetches papers by breaking the date range into daily chunks to avoid API limitations.
+
+    Args:
+        start_date_str (str): Start date (YYYY-MM-DD) for filtering papers.
+        end_date_str (str): End date (YYYY-MM-DD) for filtering papers.
+        collection_start_date_str (str | None): Start date (YYYY-MM-DD) for filtering papers in the collection.
+        collection_end_date_str (str | None): End date (YYYY-MM-DD) for filtering papers in the collection.
+        categories (list[str] | None): List of arXiv categories to search in.
+
+    Returns:
+        list[Paper]: The list of papers.
+    """
     fetcher = ArxivFetcher(page_size=500)
     if categories is None:
         categories = list(fetcher.predefined_categories)
 
     start_date_obj, end_date_obj = fetcher.check_start_end_dates_diff(start_date_str, end_date_str)
+    if collection_start_date_str is not None and collection_end_date_str is not None:
+        collection_start_date_obj, collection_end_date_obj = fetcher.check_start_end_dates_diff(
+            collection_start_date_str,
+            collection_end_date_str,
+        )
 
     all_papers = []
     total_days = (end_date_obj - start_date_obj).days + 1
@@ -246,20 +263,20 @@ def fetch_papers_in_chunks(
     # Iterate over days
     for day_offset in tqdm(range(total_days), desc="Fetching papers day by day"):
         current_date = start_date_obj + timedelta(days=day_offset)
+        end_date = current_date + timedelta(days=1) - timedelta(seconds=1)
+        if collection_start_date_str is not None and collection_end_date_str is not None:  # noqa: SIM102
+            if current_date >= collection_start_date_obj and end_date <= collection_end_date_obj:
+                continue
 
         # Request papers for one day
         papers_for_day = fetcher.fetch_papers_for_period(
             start_date_obj=current_date,
-            end_date_obj=current_date,
+            end_date_obj=end_date,
             categories=categories,
         )
 
         if papers_for_day:
             all_papers.extend(papers_for_day)
-
-        # Small pause between requests for different days, to be polite to the API
-        if day_offset < total_days - 1:
-            time.sleep(3)
 
     # Remove duplicates that may have appeared due to versioning of papers
     unique_papers = {paper.paper_id.split("v")[0]: paper for paper in all_papers}.values()
@@ -269,9 +286,18 @@ def fetch_papers_in_chunks(
 def fetch_papers_day_by_day(
     start_date_str: str,
     end_date_str: str,
+    collection_start_date_str: str | None = None,
+    collection_end_date_str: str | None = None,
     categories: list[str] | None = None,
 ) -> Iterator[list[Paper]]:
     """Fetch papers as an iterator, yielding a list (batch) of all unique papers for each day.
+
+    Args:
+        start_date_str (str): Start date (YYYY-MM-DD) for filtering papers.
+        end_date_str (str): End date (YYYY-MM-DD) for filtering papers.
+        collection_start_date_str (str | None): Start date (YYYY-MM-DD) for filtering papers in the collection.
+        collection_end_date_str (str | None): End date (YYYY-MM-DD) for filtering papers in the collection.
+        categories (list[str] | None): List of arXiv categories to search in.
 
     Yields:
         Iterator[list[Paper]]: A list of unique Paper objects published on a given day.
@@ -281,15 +307,23 @@ def fetch_papers_day_by_day(
         categories = list(fetcher.predefined_categories)
 
     start_date_obj, end_date_obj = fetcher.check_start_end_dates_diff(start_date_str, end_date_str)
+    if collection_start_date_str is not None and collection_end_date_str is not None:
+        collection_start_date_obj, collection_end_date_obj = fetcher.check_start_end_dates_diff(
+            collection_start_date_str,
+            collection_end_date_str,
+        )
 
     total_days = (end_date_obj - start_date_obj).days + 1
-
     for day_offset in tqdm(range(total_days), desc="Fetching paper chunks by day"):
         current_date = start_date_obj + timedelta(days=day_offset)
+        end_date = current_date + timedelta(days=1) - timedelta(seconds=1)
+        if collection_start_date_str is not None and collection_end_date_str is not None:  # noqa: SIM102
+            if current_date >= collection_start_date_obj and end_date <= collection_end_date_obj:
+                continue
 
         papers_for_day = fetcher.fetch_papers_for_period(
             start_date_obj=current_date,
-            end_date_obj=current_date,
+            end_date_obj=end_date,  # inside of the function we
             categories=categories,
         )
 
@@ -304,6 +338,3 @@ def fetch_papers_day_by_day(
         # Only yield if we found new, unique papers for this day
         if unique_papers_for_day:
             yield unique_papers_for_day
-
-        if day_offset < total_days - 1:
-            time.sleep(3)
