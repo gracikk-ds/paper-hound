@@ -1,4 +1,4 @@
-"""Detect moment endpoint."""
+"""Processor endpoints."""
 
 from dependency_injector.wiring import Provide, inject
 from fastapi import Depends, Form
@@ -18,7 +18,7 @@ async def insert_papers(
     end_date_str: str = Form(...),
     processor: PapersProcessor = Depends(Provide[AppContainer.processor]),  # noqa: B008
 ) -> None:
-    """Detect moment endpoint.
+    """Insert papers endpoint.
 
     Args:
         start_date_str (str): start date.
@@ -47,3 +47,18 @@ async def search_papers(
         processor (PapersProcessor): service for processor.
     """
     return processor.search_papers(query, top_k, start_date_str, end_date_str)
+
+
+@processor_router.get("/get-paper-by-id", response_model=Paper | None)
+@inject
+async def get_paper_by_id(
+    paper_id: str = Form(...),
+    processor: PapersProcessor = Depends(Provide[AppContainer.processor]),  # noqa: B008
+) -> Paper | None:
+    """Get paper by id endpoint.
+
+    Args:
+        paper_id (str): paper id.
+        processor (PapersProcessor): service for processor.
+    """
+    return processor.get_paper_by_id(paper_id)
