@@ -30,7 +30,14 @@ class PapersProcessor:
             start_date_str (str): The start date to process.
             end_date_str (str): The end date to process.
         """
-        for papers in fetch_papers_day_by_day(start_date_str, end_date_str):
+        collection_start_date_str, collection_end_date_str = self.vector_store.find_start_end_dates()
+
+        for papers in fetch_papers_day_by_day(
+            start_date_str,
+            end_date_str,
+            collection_start_date_str,
+            collection_end_date_str,
+        ):
             paper_ids = [paper.paper_id for paper in papers]
             summary_list = [paper.summary for paper in papers]
             summary_embeddings = self.embedding_service.embed_batch(summary_list)
