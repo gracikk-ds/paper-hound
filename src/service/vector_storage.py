@@ -94,6 +94,64 @@ class QdrantVectorStore:
             logger.error(f"An unexpected error occurred: {exp}")
             raise
 
+    def find_start_end_dates(self) -> tuple[str | None, str | None]:
+        """Find the start and end dates of the collection efficiently.
+
+        This method leverages server-side sorting to find the minimum and maximum 'published_date' without fetching
+        all records. For best performance, ensure a payload index exists on the 'published_date' field.
+
+        Returns:
+            tuple[str | None, str | None]:
+                - A tuple containing the start (min) and end (max) dates,
+                - None, None if the collection is empty or no points have dates.
+        """
+        self.ensure_collection()
+
+        try:
+            # Query for the earliest date (ascending order, limit 1)
+            min_date_points, _ = self.client.scroll(
+                collection_name=self.collection,
+                order_by=qmodels.OrderBy(
+                    key="published_date_ts",
+                    direction=qmodels.Direction.ASC,
+                ),
+                limit=1,
+                with_payload=["published_date_ts", "published_date"],  # Fetch only the required field
+            )
+            # Query for the latest date (descending order, limit 1)
+            max_date_points, _ = self.client.scroll(
+                collection_name=self.collection,
+                order_by=qmodels.OrderBy(
+                    key="published_date_ts",
+                    direction=qmodels.Direction.DESC,
+                ),
+                limit=1,
+                with_payload=["published_date_ts", "published_date"],
+            )
+        except UnexpectedResponse as exp:
+            logger.error(
+                f"Failed to query dates. Ensure the 'published_date' field exists on all points. Error: {exp}",
+            )
+            return None, None
+        except Exception as exp:
+            logger.error(f"An unexpected error occurred while finding dates: {exp}")
+            raise
+
+        if not min_date_points or not max_date_points:
+            logger.warning(
+                f"Collection '{self.collection}' appears to be empty or lacks 'published_date' payloads.",
+            )
+            return None, None
+
+        start_date = min_date_points[0].payload.get("published_date")  # type: ignore
+        end_date = max_date_points[0].payload.get("published_date")  # type: ignore
+
+        if start_date and end_date:
+            return start_date, end_date
+
+        logger.warning("Could not retrieve a valid start or end date from the collection.")
+        return None, None
+
     def upsert(
         self,
         ids: Iterable[str],
@@ -198,6 +256,7 @@ class QdrantVectorStore:
             ids (list[str] | str): The ID or IDs of the points to delete.
         """
         self.ensure_collection()
+        # TODO: Ensure only arxiv id is pasted
         point_ids: list[str] = [ids] if isinstance(ids, str) else ids  # type: ignore
         point_ids = [str(uuid.uuid5(uuid.NAMESPACE_URL, id_val)) for id_val in point_ids]
 
