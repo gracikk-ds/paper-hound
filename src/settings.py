@@ -29,5 +29,9 @@ class Settings(BaseSettings):
     endpoint_url: str = Field(..., description="AWS endpoint URL.")
     s3_bucket: str = Field(..., description="S3 bucket name.")
 
+    gemini_model_name: str = Field("gemini-2.5-pro", description="Gemini model name.")
+    telegram_token: str = Field(..., description="Telegram bot token.")
+    telegram_chat_id: int = Field(..., description="Chat ID to send notifications to.")
+
 
 settings = Settings()  # type: ignore
