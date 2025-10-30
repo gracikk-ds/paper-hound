@@ -18,5 +18,5 @@ def resolve_image_path(url: str, project_root: str) -> str:
     match = re.search(pattern, url)
     if match:
         relative_path = match.group(1)
-        return os.path.join(project_root, relative_path.lstrip("/"))  # noqa: PTH118
+        return os.path.join(project_root, relative_path.lstrip("/"))
     return ""

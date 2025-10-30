@@ -160,7 +160,7 @@ class MarkdownToNotionUploader:
             local_path (str): Path to the image.
             blocks (list[dict[str, Any]]): List of Notion blocks.
         """
-        s3_key = os.path.join(*os.path.normpath(local_path).split(os.sep)[-2:])  # noqa: PTH206,PTH118
+        s3_key = os.path.join(*os.path.normpath(local_path).split(os.sep)[-2:])  # noqa: PTH206
         public_url = self.bucket.upload_file(local_path, s3_key)
         blocks.append(
             {
@@ -256,7 +256,7 @@ class MarkdownToNotionUploader:
         Returns:
             str: URL of the created Notion page.
         """
-        with open(file_path, encoding="utf-8") as file:  # noqa: PTH123
+        with open(file_path, encoding="utf-8") as file:
             markdown = file.read()
 
         blocks, arxiv_url, published_date, title = self.markdown_to_blocks(markdown)
