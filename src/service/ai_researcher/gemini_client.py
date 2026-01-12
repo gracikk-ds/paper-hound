@@ -87,7 +87,7 @@ class GeminiApiClient:
             raise ValueError(msg)
         with open(creds_path) as creds_file:
             creds = json.load(creds_file)
-        self.project = creds["project_id"]  # type: ignore
+        self.project = creds["project_id"]
 
     @property
     def system_prompt(self) -> str:

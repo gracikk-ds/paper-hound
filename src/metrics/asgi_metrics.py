@@ -59,7 +59,7 @@ def metrics_endpoint(request: Request) -> Response:  # noqa: ARG001
 
     if "prometheus_multiproc_dir" in os.environ:
         registry = prometheus_client.CollectorRegistry()
-        prom_mp.MultiProcessCollector(registry)  # type: ignore
+        prom_mp.MultiProcessCollector(registry)
     else:
         registry = REGISTRY
 

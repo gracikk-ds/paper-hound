@@ -34,7 +34,7 @@ class EmbeddingService:
         if isinstance(vector, np.ndarray):
             return vector.astype(float).tolist()
         # Fallback in case model returns list-like
-        return [float(v) for v in vector]  # type: ignore
+        return [float(v) for v in vector]
 
     def embed_batch(self, texts: list[str]) -> list[list[float]]:
         """Embed a batch of texts.
@@ -48,4 +48,4 @@ class EmbeddingService:
         vectors = self.model.encode(texts, normalize_embeddings=True, batch_size=self.batch_size)
         if isinstance(vectors, np.ndarray):
             return vectors.astype(float).tolist()
-        return [[float(v) for v in vec] for vec in vectors]  # type: ignore
+        return [[float(v) for v in vec] for vec in vectors]

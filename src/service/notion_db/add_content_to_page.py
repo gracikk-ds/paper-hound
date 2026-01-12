@@ -5,10 +5,10 @@ import os
 import re
 from typing import Any
 
-import requests  # type: ignore
+import requests
 
-from src.notion_db.s3_loader import S3Uploader
-from src.notion_db.utils import resolve_image_path
+from src.service.notion_db.s3_loader import S3Uploader
+from src.service.notion_db.utils import resolve_image_path
 from src.settings import settings
 
 

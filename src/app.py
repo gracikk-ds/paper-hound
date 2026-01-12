@@ -66,7 +66,7 @@ def create_app() -> FastAPI:
     app.container = container  # type: ignore
 
     # Register the exception handler for catching unexpected errors
-    app.add_exception_handler(Exception, handle_unexpected_exception)  # type: ignore
+    app.add_exception_handler(Exception, handle_unexpected_exception)
 
     app.include_router(status_check_bp, prefix="/health", tags=["status_check"])
     app.include_router(storage_router, prefix="/storage", tags=["storage"])

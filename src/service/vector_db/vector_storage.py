@@ -143,8 +143,8 @@ class QdrantVectorStore:
             )
             return None, None
 
-        start_date = min_date_points[0].payload.get("published_date")  # type: ignore
-        end_date = max_date_points[0].payload.get("published_date")  # type: ignore
+        start_date = min_date_points[0].payload.get("published_date")
+        end_date = max_date_points[0].payload.get("published_date")
 
         if start_date and end_date:
             return start_date, end_date
@@ -257,7 +257,7 @@ class QdrantVectorStore:
         """
         self.ensure_collection()
         # TODO: Ensure only arxiv id is pasted
-        point_ids: list[str] = [ids] if isinstance(ids, str) else ids  # type: ignore
+        point_ids: list[str] = [ids] if isinstance(ids, str) else ids
         point_ids = [str(uuid.uuid5(uuid.NAMESPACE_URL, id_val)) for id_val in point_ids]
 
         if not point_ids:

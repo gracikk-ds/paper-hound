@@ -86,7 +86,7 @@ class PapersProcessor:
             )
 
         # Only create a Filter object if there are conditions to apply
-        final_filter = qmodels.Filter(must=filter_conditions) if filter_conditions else None  # type: ignore
+        final_filter = qmodels.Filter(must=filter_conditions) if filter_conditions else None
 
         results = self.vector_store.search(query_embedding, k, final_filter)
         if results:
@@ -97,7 +97,7 @@ class PapersProcessor:
         """Retrieves a single paper from the vector store by its unique ID."""
         results = self.vector_store.retrieve([paper_id])
         if results:
-            return Paper(**results[0].payload)  # type: ignore
+            return Paper(**results[0].payload)  # type: ignore[missing-argument]
         return None
 
     def find_similar_papers(self, paper_id: str, k: int = 5) -> list[Paper]:

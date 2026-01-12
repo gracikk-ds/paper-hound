@@ -5,7 +5,7 @@ Link to API page: https://www.notion.so/profile/integrations/internal/4332f261-a
 
 from typing import Any
 
-import requests  # type: ignore
+import requests
 
 from src.settings import settings
 

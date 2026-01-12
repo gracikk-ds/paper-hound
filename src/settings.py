@@ -37,4 +37,4 @@ class Settings(BaseSettings):
     telegram_chat_id: int = Field(..., description="Chat ID to send notifications to.")
 
 
-settings = Settings()  # type: ignore
+settings = Settings()

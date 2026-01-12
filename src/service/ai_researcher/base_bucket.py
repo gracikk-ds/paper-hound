@@ -2,7 +2,7 @@
 
 from abc import ABC, abstractmethod
 
-from google.cloud import storage  # type: ignore  # noqa: TC002
+from google.cloud import storage  # noqa: TC002
 
 
 class BaseBucket(ABC):

@@ -7,9 +7,9 @@ from datetime import datetime, timedelta, timezone
 from urllib import error, parse, request
 from xml.etree import ElementTree as ET
 
-from dateutil import parser  # type: ignore
+from dateutil import parser
 from loguru import logger
-from tqdm import tqdm  # type: ignore
+from tqdm import tqdm
 
 from src.service.arxiv.arxiv_utils import (
     ARXIV_ID_REGEX,

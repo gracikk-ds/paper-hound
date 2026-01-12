@@ -5,7 +5,7 @@ import os
 import subprocess
 
 from dotenv import load_dotenv
-from google.cloud import storage  # type: ignore
+from google.cloud import storage
 from loguru import logger
 
 from src.service.ai_researcher.base_bucket import BaseBucket
@@ -37,7 +37,7 @@ class GoogleBucket(BaseBucket):
             raise ValueError(msg)
         with open(creds_path) as creds_file:
             creds = json.load(creds_file)
-        self.project = creds["project_id"]  # type: ignore
+        self.project = creds["project_id"]
 
     def _create_bucket(self) -> None:
         """Create a bucket for the Gemini API.

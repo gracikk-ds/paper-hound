@@ -1,6 +1,6 @@
 """Provide a class for uploading images to S3."""
 
-import boto3  # type: ignore
+import boto3
 
 from src.settings import settings
 
@@ -24,7 +24,7 @@ class S3Uploader:
         self.bucket = settings.s3_bucket
         self.folder = folder
 
-        session = boto3.session.Session()
+        session = boto3.session.Session()  # type: ignore
         self.s3_client = session.client(
             service_name="s3",
             aws_access_key_id=aws_access_key_id,

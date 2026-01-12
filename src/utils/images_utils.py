@@ -72,7 +72,7 @@ def extract_images(pdf_path: str, output_folder: str = "images") -> None:
         pdf_path: Path to the input PDF file
         output_folder: Folder to save extracted images
     """
-    doc = fitz.open(pdf_path)
+    doc = fitz.open(pdf_path)  # type: ignore
     os.makedirs(output_folder, exist_ok=True)
 
     # Iterate through each page
@@ -114,11 +114,11 @@ def extract_images(pdf_path: str, output_folder: str = "images") -> None:
                 continue
             image_name = f"figure_{figure_number}.jpg"
             image_path = os.path.join(output_folder, image_name)
-            rect = fitz.Rect(coords[0] - 10, coords[1] - 10, coords[2] + 10, coords[3] + 10)
+            rect = fitz.Rect(coords[0] - 10, coords[1] - 10, coords[2] + 10, coords[3] + 10)  # type: ignore
             pix = page.get_pixmap(dpi=300, clip=rect, alpha=False)
             img_bytes = pix.tobytes("ppm")  # Get image as PPM bytes
             image = Image.open(io.BytesIO(img_bytes))
-            image = image.convert("RGB")  # type: ignore
+            image = image.convert("RGB")
             image.save(image_path, "JPEG", quality=70)
             with open(os.path.join(output_folder, f"figure_{figure_number}.txt"), "w") as description_file:
                 description_file.write(f"{description}")
