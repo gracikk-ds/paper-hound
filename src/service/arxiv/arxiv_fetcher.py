@@ -82,10 +82,7 @@ class ArxivFetcher:
             raise ValueError(msg)
         return start_date_obj, end_date_obj
 
-    def _get_main_authors(
-        self,
-        authors: list[str],
-    ) -> list[str]:
+    def _get_main_authors(self, authors: list[str]) -> list[str]:
         """Get the main authors from the list of authors.
 
         Args:
