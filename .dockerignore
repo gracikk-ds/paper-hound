@@ -1,0 +1,10 @@
+__pycache__
+.git
+.env
+venv/
+.venv/
+*.pyc
+uv.lock
+tests/
+terminals/
+.DS_Store

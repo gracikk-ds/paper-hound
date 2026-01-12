@@ -169,9 +169,31 @@ class QdrantVectorStore:
         """
         self.ensure_collection()
         uuid_ids = [str(uuid.uuid5(uuid.NAMESPACE_URL, id_val)) for id_val in ids]
+
+        existing_ids = set()
+        # Check for existing points to avoid re-upserting
+        check_batch_size = 1000
+        for i in range(0, len(uuid_ids), check_batch_size):
+            chunk = uuid_ids[i : i + check_batch_size]
+            try:
+                results = self.client.retrieve(
+                    collection_name=self.collection,
+                    ids=chunk,
+                    with_payload=False,
+                    with_vectors=False,
+                )
+                existing_ids.update(point.id for point in results)
+            except Exception as exp:
+                logger.error(f"Failed to check existing points: {exp}")
+                raise
+
+        if existing_ids:
+            logger.info(f"Skipping {len(existing_ids)} existing points.")
+
         points_iter = (
             qmodels.PointStruct(id=uuid_id, vector=vec, payload=pay.model_dump())
             for uuid_id, vec, pay in zip(uuid_ids, vectors, payloads, strict=True)
+            if uuid_id not in existing_ids
         )
 
         batch_num = 0

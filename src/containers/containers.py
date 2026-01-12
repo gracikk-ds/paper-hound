@@ -13,6 +13,7 @@ from src.service.ai_researcher.gemini_client import GeminiApiClient
 from src.service.ai_researcher.summarizer import Summarizer
 from src.service.arxiv.arxiv_fetcher import ArxivFetcher
 from src.service.notion_db.add_content_to_page import MarkdownToNotionUploader
+from src.service.notion_db.extract_page_content import NotionPageExtractor
 from src.service.processor import PapersProcessor
 from src.service.vector_db.embedder import EmbeddingService
 from src.service.vector_db.vector_storage import QdrantVectorStore
@@ -105,6 +106,10 @@ class AppContainer(containers.DeclarativeContainer):
         path_to_prompt=config.summarizer_path_to_prompt,
     )
 
+    notion_settings_extractor: providers.Singleton[NotionPageExtractor] = providers.Singleton(
+        NotionPageExtractor,
+    )
+
     workflow: providers.Singleton[WorkflowService] = providers.Singleton(
         WorkflowService,
         processor=processor,
@@ -112,6 +117,8 @@ class AppContainer(containers.DeclarativeContainer):
         summarizer=summarizer,
         arxiv_fetcher=arxiv_fetcher,
         notion_uploader=notion_uploader,
+        notion_settings_extractor=notion_settings_extractor,
+        notion_settings_db_ids=config.notion_settings_db_ids,
     )
 
     # Singleton and Callable provider for the Logger resource.

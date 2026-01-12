@@ -1,5 +1,7 @@
 """Settings for the application."""
 
+import os
+
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -7,7 +9,12 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """Settings for the application."""
 
-    model_config = SettingsConfigDict(env_prefix="PAPER_HOUND_")
+    model_config = SettingsConfigDict(
+        env_file=os.getenv("ENV_FILE_PATH", ".env"),
+        env_file_encoding="utf-8",
+        extra="ignore",
+        protected_namespaces=("settings_",),  # Added to resolve the warning
+    )
 
     api_name: str = Field("Paper Hound API", description="The name of the API")
     api_version: str = Field("0.1.0", description="The version of the API")
@@ -23,14 +30,18 @@ class Settings(BaseSettings):
     embedding_service_batch_size: int = Field(32, description="The batch size for the embedding service")
 
     notion_token: str = Field(..., description="Notion API token.")
-    notion_database_id: str = Field(..., description="Notion database ID.")
+    notion_database_id: str = Field("228f6f75bb0b80babf73d46a6254a459", description="Notion database ID.")
+    notion_settings_db_ids: dict[str, str] = Field(
+        {"Image Editing": "228f6f75bb0b8023a7aeced6e6799a89"},
+        description="Notion settings database IDs.",
+    )
     site_reports_dir: str = Field("site/_reports", description="Site reports directory.")
     aws_access_key_id: str = Field(..., description="AWS access key ID.")
     aws_secret_access_key: str = Field(..., description="AWS secret access key.")
     endpoint_url: str = Field(..., description="AWS endpoint URL.")
     s3_bucket: str = Field(..., description="S3 bucket name.")
 
-    gemini_model_name: str = Field("gemini-2.5-pro", description="Gemini model name.")
+    gemini_model_name: str = Field("gemini-3-flash-preview", description="Gemini model name.")
     classifier_path_to_prompt: str = Field("prompts/classifier.txt", description="Path to the classifier prompt.")
     summarizer_path_to_prompt: str = Field("prompts/summarizer.txt", description="Path to the summarizer prompt.")
     telegram_token: str = Field(..., description="Telegram bot token.")

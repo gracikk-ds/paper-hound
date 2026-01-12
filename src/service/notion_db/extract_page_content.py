@@ -90,12 +90,38 @@ class NotionPageExtractor:
                     texts.append(plain_text)
         return "\n".join(texts)
 
+    def extract_settings_from_page(self, page_id: str) -> dict[str, Any] | None:
+        """Extract settings from a Notion page.
+
+        Args:
+            page_id (str): The ID of the Notion page.
+
+        Returns:
+            dict: Dictionary of settings.
+        """
+        blocks = extractor.get_blocks(page_id)
+        settings = {"Query Prompt": None, "Classifier Prompt": None, "Summarizer Prompt": None}
+        current_setting = None
+        for block in blocks:
+            block_type = block.get("type")
+            block_text = extractor.extract_text_from_block(block)
+            if block_type == "heading_1" and block_text in settings:
+                current_setting = block_text
+                continue
+
+            if current_setting is not None:
+                settings[current_setting] = block_text
+                current_setting = None
+
+        if any(value is None for value in settings.values()):
+            return None
+
+        settings["Page Name"] = (
+            self.get_page(page_id).get("properties", {}).get("Name", {}).get("title", [{}])[0].get("plain_text")
+        )
+        return settings
+
 
 if __name__ == "__main__":
-    PAGE_ID = "228f6f75bb0b8023a7aeced6e6799a89"
     extractor = NotionPageExtractor()
-
-    blocks = extractor.get_blocks(PAGE_ID)
-    for block in blocks:
-        if block.get("type") == "heading_1":
-            header_text = extractor.extract_text_from_block(block)
+    print(extractor.extract_settings_from_page("228f6f75bb0b8023a7aeced6e6799a89"))
