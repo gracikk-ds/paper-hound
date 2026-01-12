@@ -1,5 +1,6 @@
 """App entrypoints."""
 
+import asyncio
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
@@ -27,8 +28,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     workflow_service = app.container.workflow()  # type: ignore
 
     # Schedule the daily job at 08:00
-    scheduler.add_job(workflow_service.run_scheduled_job, "cron", hour=8, minute=0)
+    scheduler.add_job(workflow_service.run_scheduled_job, "cron", hour=6, minute=0)
     scheduler.start()
+
+    # Run the job immediately on startup to debug the workflow
+    app.state.startup_job = asyncio.create_task(workflow_service.run_scheduled_job())
 
     yield
 

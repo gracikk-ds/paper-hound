@@ -99,12 +99,12 @@ class NotionPageExtractor:
         Returns:
             dict: Dictionary of settings.
         """
-        blocks = extractor.get_blocks(page_id)
+        blocks = self.get_blocks(page_id)
         settings = {"Query Prompt": None, "Classifier Prompt": None, "Summarizer Prompt": None}
         current_setting = None
         for block in blocks:
             block_type = block.get("type")
-            block_text = extractor.extract_text_from_block(block)
+            block_text = self.extract_text_from_block(block)
             if block_type == "heading_1" and block_text in settings:
                 current_setting = block_text
                 continue
@@ -120,8 +120,3 @@ class NotionPageExtractor:
             self.get_page(page_id).get("properties", {}).get("Name", {}).get("title", [{}])[0].get("plain_text")
         )
         return settings
-
-
-if __name__ == "__main__":
-    extractor = NotionPageExtractor()
-    print(extractor.extract_settings_from_page("228f6f75bb0b8023a7aeced6e6799a89"))

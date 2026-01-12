@@ -107,6 +107,10 @@ class QdrantVectorStore:
         """
         self.ensure_collection()
 
+        if self.count() == 0:
+            logger.info(f"Collection '{self.collection}' appears to be empty.")
+            return None, None
+
         try:
             # Query for the earliest date (ascending order, limit 1)
             min_date_points, _ = self.client.scroll(
@@ -278,7 +282,7 @@ class QdrantVectorStore:
             ids (list[str] | str): The ID or IDs of the points to delete.
         """
         self.ensure_collection()
-        # TODO: Ensure only arxiv id is pasted
+
         point_ids: list[str] = [ids] if isinstance(ids, str) else ids
         point_ids = [str(uuid.uuid5(uuid.NAMESPACE_URL, id_val)) for id_val in point_ids]
 

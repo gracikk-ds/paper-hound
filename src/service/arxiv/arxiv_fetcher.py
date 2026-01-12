@@ -3,7 +3,7 @@
 import re
 import time
 from collections.abc import Iterator
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from urllib import error, parse, request
 from xml.etree import ElementTree as ET
 
@@ -75,8 +75,10 @@ class ArxivFetcher:
         Returns:
             tuple[datetime, datetime]: The start and end dates as datetime objects.
         """
-        start_date_obj = datetime.strptime(start_date, "%Y-%m-%d").astimezone(timezone.utc)
-        end_date_obj = datetime.strptime(end_date, "%Y-%m-%d").astimezone(timezone.utc)
+        start_date_obj = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=UTC)
+        end_date_obj = (
+            datetime.strptime(end_date, "%Y-%m-%d").replace(tzinfo=UTC) + timedelta(days=1) - timedelta(seconds=1)
+        )
         if start_date_obj > end_date_obj:
             msg = "Start date must be before end date."
             raise ValueError(msg)
@@ -229,9 +231,12 @@ class ArxivFetcher:
             url = self.base_url + parse.urlencode(query_params)
             entities = self._extract_entities(url)
             if not entities:
+                logger.debug(f"No entities found for query: {url}")
                 break
 
-            papers.extend(self.parse_papers_info(entities))
+            papers_found = self.parse_papers_info(entities)
+            logger.info(f"Found {len(papers_found)} papers in current batch")
+            papers.extend(papers_found)
             start_index += len(entities)
 
             # If we received less papers than requested, this is the last page
@@ -353,7 +358,7 @@ def fetch_papers_day_by_day(
     Yields:
         Iterator[list[Paper]]: A list of unique Paper objects published on a given day.
     """
-    fetcher = ArxivFetcher(page_size=200)
+    fetcher = ArxivFetcher(page_size=100)
     if categories is None:
         categories = list(fetcher.predefined_categories)
 

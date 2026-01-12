@@ -68,7 +68,7 @@ class PapersProcessor:
             start_timestamp = start_dt.timestamp()
             filter_conditions.append(
                 qmodels.FieldCondition(
-                    key="published_date_ts",  # IMPORTANT: Assumes you store a timestamp
+                    key="published_date_ts",
                     range=qmodels.Range(gte=start_timestamp),
                 ),
             )
@@ -80,7 +80,7 @@ class PapersProcessor:
             next_day_timestamp = next_day_dt.timestamp()
             filter_conditions.append(
                 qmodels.FieldCondition(
-                    key="published_date_ts",  # IMPORTANT: Assumes you store a timestamp
+                    key="published_date_ts",
                     range=qmodels.Range(lt=next_day_timestamp),  # Use 'lt' (less than)
                 ),
             )
