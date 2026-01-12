@@ -1,7 +1,5 @@
 """Ai endpoints."""
 
-import os
-
 from dependency_injector.wiring import Provide, inject
 from fastapi import Depends, Form
 from loguru import logger
@@ -9,12 +7,9 @@ from loguru import logger
 from src.containers.containers import AppContainer
 from src.routes.routers import processor_router
 from src.service.ai_researcher.classifier import Classifier
-from src.service.ai_researcher.summarizer import Summarizer
 from src.service.arxiv.arxiv_fetcher import ArxivFetcher
-from src.service.notion_db.add_content_to_page import MarkdownToNotionUploader
 from src.service.processor import PapersProcessor
-from src.utils.images_utils import add_images_to_md
-from src.utils.load_utils import load_pdf_and_images
+from src.service.workflow import WorkflowService
 from src.utils.schemas import Paper
 
 ProcessorResponseModel = list[Paper]
@@ -22,14 +17,11 @@ ProcessorResponseModel = list[Paper]
 
 @processor_router.post("/summarize-paper", response_model=None)
 @inject
-async def summarize_paper(  # noqa: PLR0913
+async def summarize_paper(
     paper_id: str = Form(...),
     summarizer_prompt: str | None = Form(None),
     category: str = Form("AdHoc Research"),
-    notion_uploader: MarkdownToNotionUploader = Depends(Provide[AppContainer.notion_uploader]),  # noqa: B008
-    arxiv_fetcher: ArxivFetcher = Depends(Provide[AppContainer.arxiv_fetcher]),  # noqa: B008
-    summarizer: Summarizer = Depends(Provide[AppContainer.summarizer]),  # noqa: B008
-    processor: PapersProcessor = Depends(Provide[AppContainer.processor]),  # noqa: B008
+    workflow: WorkflowService = Depends(Provide[AppContainer.workflow]),  # noqa: B008
 ) -> str | None:
     """Summarize paper endpoint.
 
@@ -37,39 +29,16 @@ async def summarize_paper(  # noqa: PLR0913
         paper_id (str): the ID of the paper to summarize.
         summarizer_prompt (str | None): the prompt to use for the summarizer.
         category (str): the category of the paper.
-        notion_uploader (MarkdownToNotionUploader): Class to upload markdown files to Notion.
-        arxiv_fetcher (ArxivFetcher): Class to fetch and filter arXiv papers.
-        summarizer (Summarizer): Class to summarize papers.
-        processor (PapersProcessor): Class to process papers.
+        workflow (WorkflowService): Workflow service.
 
     Returns:
         str | None: the URL of the created Notion page, None if an error occurred.
     """
-    # Extract paper information
-    paper = processor.get_paper_by_id(paper_id)
-    if paper is None:
-        paper = arxiv_fetcher.extract_paper_by_name_or_id(paper_id)
-    else:
-        return None
-    tmp_pdf_path, tmp_images_path = load_pdf_and_images(paper)
-    if tmp_pdf_path is None or tmp_images_path is None:
-        return None
-
-    # Summarize paper
-    _, md_path = summarizer.summarize(paper, tmp_pdf_path, summarizer_prompt)
-    if md_path is None:
-        logger.error(f"Error summarizing paper: {paper.title}")
-        return None
-    add_images_to_md(md_path, str(tmp_images_path), paper.model_dump())
-
-    # Upload summary to notion
-    notion_page_url = notion_uploader.upload_markdown_file(md_path, category=category)
-
-    # Clean up
-    tmp_pdf_path.unlink()
-    tmp_images_path.unlink()
-    os.remove(md_path)  # noqa: PTH107
-    return notion_page_url
+    return workflow.process_paper_summary_and_upload(
+        paper_id=paper_id,
+        summarizer_prompt=summarizer_prompt,
+        category=category,
+    )
 
 
 @processor_router.post("/classify-paper", response_model=None)
@@ -95,8 +64,14 @@ async def classify_paper(
     """
     paper = processor.get_paper_by_id(paper_id)
     if paper is None:
-        paper = arxiv_fetcher.extract_paper_by_name_or_id(paper_id)
-    else:
+        try:
+            paper = arxiv_fetcher.extract_paper_by_name_or_id(paper_id)
+        except Exception as exp:  # noqa: BLE001
+            logger.error(f"Error fetching paper {paper_id}: {exp}")
+            return None
+
+    if paper is None:
         logger.error(f"Error extracting paper: {paper_id}")
         return None
+
     return classifier.classify(title=paper.title, summary=paper.summary, system_prompt=classifier_system_prompt)

@@ -4,7 +4,7 @@
 # -------------------------------------------------------------------------------------------------------------------
 name = "arxiv_paper_hound"
 version = "0.1.0"
-requires-python = ">= 3.10"
+requires-python = ">= 3.12"
 description = "A semantic search engine for finding ArXiv academic papers based on query meaning, not just keywords."
 readme = "README.md"
 authors = [{name = "Gordeev A.", email = "asegordeev@gmail.com"}]
@@ -67,6 +67,7 @@ dependencies = [
     "grpcio_status==1.49.0rc1",
     "aiofiles>=25.1.0",
     "fitz>=0.0.1.dev2",
+    "apscheduler>=3.11.2",
 ]
 
 [project.optional-dependencies]
@@ -88,6 +89,7 @@ dev = [
 
 # -------------------------------------------------------------------------------------------------------------------
 [tool.ruff]
+target-version = "py312"
 indent-width = 4
 line-length = 120
 output-format = "grouped"

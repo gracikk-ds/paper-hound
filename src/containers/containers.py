@@ -16,6 +16,7 @@ from src.service.notion_db.add_content_to_page import MarkdownToNotionUploader
 from src.service.processor import PapersProcessor
 from src.service.vector_db.embedder import EmbeddingService
 from src.service.vector_db.vector_storage import QdrantVectorStore
+from src.service.workflow import WorkflowService
 from src.settings import Settings
 
 
@@ -102,6 +103,15 @@ class AppContainer(containers.DeclarativeContainer):
         Summarizer,
         llm_client=llm_client,
         path_to_prompt=config.summarizer_path_to_prompt,
+    )
+
+    workflow: providers.Singleton[WorkflowService] = providers.Singleton(
+        WorkflowService,
+        processor=processor,
+        classifier=classifier,
+        summarizer=summarizer,
+        arxiv_fetcher=arxiv_fetcher,
+        notion_uploader=notion_uploader,
     )
 
     # Singleton and Callable provider for the Logger resource.

@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     embedding_service_batch_size: int = Field(32, description="The batch size for the embedding service")
 
     notion_token: str = Field(..., description="Notion API token.")
+    notion_database_id: str = Field(..., description="Notion database ID.")
     site_reports_dir: str = Field("site/_reports", description="Site reports directory.")
     aws_access_key_id: str = Field(..., description="AWS access key ID.")
     aws_secret_access_key: str = Field(..., description="AWS secret access key.")

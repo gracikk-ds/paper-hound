@@ -5,3 +5,4 @@ from fastapi import APIRouter
 processor_router = APIRouter(tags=["processor"])
 storage_router = APIRouter(tags=["storage"])
 status_check_bp = APIRouter(tags=["status_check"])
+workflow_router = APIRouter(tags=["workflow"])
