@@ -1,7 +1,6 @@
 """Ai endpoints."""
 
 import os
-from pathlib import Path
 
 from dependency_injector.wiring import Provide, inject
 from fastapi import Depends, Form
@@ -13,32 +12,11 @@ from src.service.ai_researcher.classifier import Classifier
 from src.service.ai_researcher.summarizer import Summarizer
 from src.service.arxiv.arxiv_fetcher import ArxivFetcher
 from src.service.notion_db.add_content_to_page import MarkdownToNotionUploader
-from src.utils.images_utils import add_images_to_md, extract_images
-from src.utils.load_utils import download_pdf
+from src.utils.images_utils import add_images_to_md
+from src.utils.load_utils import load_pdf_and_images
 from src.utils.schemas import Paper
 
 ProcessorResponseModel = list[Paper]
-
-
-def load_pdf_and_images(paper: Paper) -> tuple[Path | None, Path | None]:
-    """Load the PDF and images for the paper.
-
-    Args:
-        paper (Paper): the paper to load.
-
-    Returns:
-        tuple[Path, Path]: the path to the PDF and the path to the images.
-    """
-    file_name = f"{paper.title.replace(' ', '_').lower()}.pdf"
-    tmp_pdf_path = Path("tmp_pdfs") / file_name
-    tmp_images_path = Path("tmp_images") / file_name
-    try:
-        download_pdf(paper.pdf_url, tmp_pdf_path)
-        extract_images(str(tmp_pdf_path), str(tmp_images_path))
-    except Exception as exp:  # noqa: BLE001
-        logger.error(f"Error loading PDF and images for paper: {paper.title}: {exp}")
-        return None, None
-    return tmp_pdf_path, tmp_images_path
 
 
 @processor_router.post("/summarize-paper", response_model=None)
