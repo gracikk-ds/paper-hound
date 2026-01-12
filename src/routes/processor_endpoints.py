@@ -62,3 +62,48 @@ async def get_paper_by_id(
         processor (PapersProcessor): service for processor.
     """
     return processor.get_paper_by_id(paper_id)
+
+
+@processor_router.post("/find-similar-papers", response_model=ProcessorResponseModel)
+@inject
+async def find_similar_papers(
+    paper_id: str = Form(...),
+    top_k: int = Form(5),
+    processor: PapersProcessor = Depends(Provide[AppContainer.processor]),  # noqa: B008
+) -> ProcessorResponseModel:
+    """Find similar papers endpoint.
+
+    Args:
+        paper_id (str): paper id.
+        top_k (int): top k.
+        processor (PapersProcessor): service for processor.
+    """
+    return processor.find_similar_papers(paper_id, top_k)
+
+
+@processor_router.post("/delete-papers", response_model=None)
+@inject
+async def delete_papers(
+    paper_ids: list[str] = Form(...),  # noqa: B008
+    processor: PapersProcessor = Depends(Provide[AppContainer.processor]),  # noqa: B008
+) -> None:
+    """Delete papers endpoint.
+
+    Args:
+        paper_ids (list[str]): list of paper ids.
+        processor (PapersProcessor): service for processor.
+    """
+    processor.delete_papers(paper_ids)
+
+
+@processor_router.get("/count-papers", response_model=int)
+@inject
+async def count_papers(
+    processor: PapersProcessor = Depends(Provide[AppContainer.processor]),  # noqa: B008
+) -> int:
+    """Count papers endpoint.
+
+    Args:
+        processor (PapersProcessor): service for processor.
+    """
+    return processor.count_papers()
