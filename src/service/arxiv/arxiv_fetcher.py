@@ -1,28 +1,26 @@
 """arXiv paper fetcher."""
 
+import re
 import time
-import urllib.request
 from collections.abc import Iterator
 from datetime import datetime, timedelta, timezone
+from urllib import error, parse, request
 from xml.etree import ElementTree as ET
 
 from dateutil import parser  # type: ignore
 from loguru import logger
 from tqdm import tqdm  # type: ignore
 
+from src.service.arxiv.arxiv_utils import (
+    ARXIV_ID_REGEX,
+    count_inclusive_days,
+    deduplicate_papers_by_base_id,
+    get_base_paper_id,
+    iter_daily_ranges,
+    safe_get_text,
+    should_skip_collection_window,
+)
 from src.utils.schemas import Paper
-
-
-def safe_get_text(element: ET.Element, tag: str, default: str = "") -> str:
-    """Get the text of an element, or return a default value if the element is not found.
-
-    Args:
-        element (ET.Element): The element to get the text from.
-        tag (str): The tag of the element to get the text from.
-        default (str): The default value to return if the element is not found.
-    """
-    found_element = element.find(tag)
-    return found_element.text if found_element is not None else default  # type: ignore
 
 
 class ArxivFetcher:
@@ -50,8 +48,7 @@ class ArxivFetcher:
         """Build a boolean query string that conforms to the arXiv API grammar.
 
         Args:
-            keywords (List[str]): List of keywords to search for.
-            categories (List[str]): List of arXiv categories to search in.
+            categories (list[str]): arXiv categories to search in.
             start_date (datetime): Start date for filtering papers.
             end_date (datetime): End date for filtering papers.
 
@@ -112,9 +109,9 @@ class ArxivFetcher:
         """
         try:
             # Make the API request
-            with urllib.request.urlopen(url) as response:  # noqa: S310
+            with request.urlopen(url) as response:  # noqa: S310
                 response_data = response.read().decode("utf-8")
-        except urllib.error.HTTPError as exp:
+        except error.HTTPError as exp:
             logger.error(f"HTTP Error: {exp.code} {exp.reason} for URL: {url}")
             return []
 
@@ -173,6 +170,28 @@ class ArxivFetcher:
             )
         return papers
 
+    @classmethod
+    def _extract_arxiv_id(cls, value: str) -> str | None:
+        """Return a normalized arXiv ID if the provided value looks like one.
+
+        Args:
+            value (str): Any string potentially containing an arXiv identifier.
+
+        Returns:
+            str | None: A normalized identifier or None when the input is invalid.
+        """
+        normalized = value.strip()
+        if not normalized:
+            return None
+        normalized = re.sub(r"^https?://arxiv\.org/(abs|pdf)/", "", normalized, flags=re.IGNORECASE)
+        normalized = normalized.removeprefix("arXiv:")
+        normalized = normalized.rstrip("/")
+        normalized = normalized.split("?")[0]
+        normalized = normalized.removesuffix(".pdf")
+        if ARXIV_ID_REGEX.match(normalized):
+            return normalized
+        return None
+
     def fetch_papers_for_period(
         self,
         start_date_obj: datetime,
@@ -210,7 +229,7 @@ class ArxivFetcher:
                 "sortBy": "submittedDate",
                 "sortOrder": "ascending",
             }
-            url = self.base_url + urllib.parse.urlencode(query_params)  # type: ignore
+            url = self.base_url + parse.urlencode(query_params)
             entities = self._extract_entities(url)
             if not entities:
                 break
@@ -225,6 +244,40 @@ class ArxivFetcher:
             # Be polite to the API
             time.sleep(3)
         return papers
+
+    def extract_paper_by_name_or_id(self, name_or_id: str) -> Paper:
+        """Extract a paper by name or ID.
+
+        Args:
+            name_or_id (str): The name or ID of the paper.
+
+        Returns:
+            Paper: The paper.
+        """
+        cleaned_value = name_or_id.strip()
+        arxiv_id = self._extract_arxiv_id(cleaned_value)
+        if arxiv_id is not None:
+            logger.info(f"Fetching paper by arXiv id: {arxiv_id}")
+            query_params = {"id_list": arxiv_id}
+        else:
+            if not cleaned_value:
+                msg = "Paper title is empty."
+                raise ValueError(msg)
+            logger.info(f"Fetching paper by title: {cleaned_value}")
+            query_params = {
+                "search_query": f'ti:"{cleaned_value}"',
+                "start": "0",
+                "max_results": "1",
+                "sortBy": "relevance",
+                "sortOrder": "descending",
+            }
+        url = self.base_url + parse.urlencode(query_params)
+        entities = self._extract_entities(url)
+        if not entities:
+            search_target = f"arXiv id '{arxiv_id}'" if arxiv_id else f"title '{cleaned_value}'"
+            msg = f"No papers found for {search_target}."
+            raise ValueError(msg)
+        return self.parse_papers_info(entities)[0]
 
 
 def fetch_papers_in_chunks(
@@ -251,36 +304,37 @@ def fetch_papers_in_chunks(
         categories = list(fetcher.predefined_categories)
 
     start_date_obj, end_date_obj = fetcher.check_start_end_dates_diff(start_date_str, end_date_str)
+    collection_start_date_obj: datetime | None = None
+    collection_end_date_obj: datetime | None = None
     if collection_start_date_str is not None and collection_end_date_str is not None:
         collection_start_date_obj, collection_end_date_obj = fetcher.check_start_end_dates_diff(
             collection_start_date_str,
             collection_end_date_str,
         )
 
-    all_papers = []
-    total_days = (end_date_obj - start_date_obj).days + 1
+    total_days = count_inclusive_days(start_date_obj, end_date_obj)
+    all_papers: list[Paper] = []
+    for current_start, current_end in tqdm(
+        iter_daily_ranges(start_date_obj, end_date_obj),
+        desc="Fetching papers day by day",
+        total=total_days,
+    ):
+        if should_skip_collection_window(
+            current_start,
+            current_end,
+            collection_start_date_obj,
+            collection_end_date_obj,
+        ):
+            continue
 
-    # Iterate over days
-    for day_offset in tqdm(range(total_days), desc="Fetching papers day by day"):
-        current_date = start_date_obj + timedelta(days=day_offset)
-        end_date = current_date + timedelta(days=1) - timedelta(seconds=1)
-        if collection_start_date_str is not None and collection_end_date_str is not None:  # noqa: SIM102
-            if current_date >= collection_start_date_obj and end_date <= collection_end_date_obj:
-                continue
-
-        # Request papers for one day
         papers_for_day = fetcher.fetch_papers_for_period(
-            start_date_obj=current_date,
-            end_date_obj=end_date,
+            start_date_obj=current_start,
+            end_date_obj=current_end,
             categories=categories,
         )
+        all_papers.extend(papers_for_day)
 
-        if papers_for_day:
-            all_papers.extend(papers_for_day)
-
-    # Remove duplicates that may have appeared due to versioning of papers
-    unique_papers = {paper.paper_id.split("v")[0]: paper for paper in all_papers}.values()
-    return list(unique_papers)
+    return deduplicate_papers_by_base_id(all_papers)
 
 
 def fetch_papers_day_by_day(
@@ -307,34 +361,40 @@ def fetch_papers_day_by_day(
         categories = list(fetcher.predefined_categories)
 
     start_date_obj, end_date_obj = fetcher.check_start_end_dates_diff(start_date_str, end_date_str)
+    collection_start_date_obj: datetime | None = None
+    collection_end_date_obj: datetime | None = None
     if collection_start_date_str is not None and collection_end_date_str is not None:
         collection_start_date_obj, collection_end_date_obj = fetcher.check_start_end_dates_diff(
             collection_start_date_str,
             collection_end_date_str,
         )
 
-    total_days = (end_date_obj - start_date_obj).days + 1
-    for day_offset in tqdm(range(total_days), desc="Fetching paper chunks by day"):
-        current_date = start_date_obj + timedelta(days=day_offset)
-        end_date = current_date + timedelta(days=1) - timedelta(seconds=1)
-        if collection_start_date_str is not None and collection_end_date_str is not None:  # noqa: SIM102
-            if current_date >= collection_start_date_obj and end_date <= collection_end_date_obj:
-                continue
+    total_days = count_inclusive_days(start_date_obj, end_date_obj)
+    for current_start, current_end in tqdm(
+        iter_daily_ranges(start_date_obj, end_date_obj),
+        desc="Fetching paper chunks by day",
+        total=total_days,
+    ):
+        if should_skip_collection_window(
+            current_start,
+            current_end,
+            collection_start_date_obj,
+            collection_end_date_obj,
+        ):
+            continue
 
         papers_for_day = fetcher.fetch_papers_for_period(
-            start_date_obj=current_date,
-            end_date_obj=end_date,  # inside of the function we
+            start_date_obj=current_start,
+            end_date_obj=current_end,
             categories=categories,
         )
 
-        # Filter out any papers we might have already seen
         unique_papers_for_day = []
         for paper in papers_for_day:
-            base_id = paper.paper_id.split("v")[0]
+            base_id = get_base_paper_id(paper.paper_id)
             if base_id not in fetcher.seen_paper_ids:
                 fetcher.seen_paper_ids.add(base_id)
                 unique_papers_for_day.append(paper)
 
-        # Only yield if we found new, unique papers for this day
         if unique_papers_for_day:
             yield unique_papers_for_day

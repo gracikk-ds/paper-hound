@@ -247,11 +247,12 @@ class MarkdownToNotionUploader:
                 )
         return blocks, arxiv_url, published_date, title
 
-    def upload_markdown_file(self, file_path: str) -> str:
+    def upload_markdown_file(self, file_path: str, category: str = "Image Editing") -> str:
         """Read the markdown file, convert to Notion blocks, and upload as a new page.
 
         Args:
             file_path (str): Path to the markdown file.
+            category (str): Category of the paper.
 
         Returns:
             str: URL of the created Notion page.
@@ -261,7 +262,7 @@ class MarkdownToNotionUploader:
 
         blocks, arxiv_url, published_date, title = self.markdown_to_blocks(markdown)
         properties = {
-            "Category": {"multi_select": [{"name": "Image Editing"}]},
+            "Category": {"multi_select": [{"name": category}]},
             "Status": {"select": {"name": "Inbox"}},
             "Arxiv": {"url": arxiv_url},
             "Published": {"date": {"start": published_date}},

@@ -35,7 +35,7 @@ class GeminiApiClient:
         system_prompt: str | None = None,
         temperature: float = 0.3,
         thinking_budget: int | None = None,
-        site_reports_dir: str = "site/_reports",
+        site_reports_dir: str = "reports/",
         *,
         verbose: bool = False,
     ) -> None:

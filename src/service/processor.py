@@ -4,9 +4,9 @@ from datetime import datetime, timedelta
 
 from qdrant_client import models as qmodels
 
-from src.service.arxiv_fetcher import fetch_papers_day_by_day
-from src.service.embedder import EmbeddingService
-from src.service.vector_storage import QdrantVectorStore
+from src.service.arxiv.arxiv_fetcher import fetch_papers_day_by_day
+from src.service.vector_db.embedder import EmbeddingService
+from src.service.vector_db.vector_storage import QdrantVectorStore
 from src.utils.schemas import Paper
 
 

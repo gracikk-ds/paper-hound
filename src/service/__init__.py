@@ -1,1 +1,1 @@
-"""Service package for the application."""
+"""Arxiv And Vector DB Services."""
