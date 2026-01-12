@@ -8,9 +8,13 @@ from dependency_injector import containers, providers
 from loguru import logger
 
 from src.logger.log import DevelopFormatter
-from src.service.embedder import EmbeddingService
+from src.service.ai_researcher.classifier import Classifier
+from src.service.ai_researcher.gemini_researcher import GeminiApiClient
+from src.service.arxiv.arxiv_fetcher import ArxivFetcher
+from src.service.notion_db.add_content_to_page import MarkdownToNotionUploader
 from src.service.processor import PapersProcessor
-from src.service.vector_storage import QdrantVectorStore
+from src.service.vector_db.embedder import EmbeddingService
+from src.service.vector_db.vector_storage import QdrantVectorStore
 from src.settings import Settings
 
 
@@ -50,6 +54,7 @@ class AppContainer(containers.DeclarativeContainer):
     # Get the configuration
     config = providers.Configuration()
 
+    # Vector database entities
     vector_store: providers.Singleton[QdrantVectorStore] = providers.Singleton(
         QdrantVectorStore,
         collection=config.vector_store_collection,
@@ -68,6 +73,28 @@ class AppContainer(containers.DeclarativeContainer):
         PapersProcessor,
         vector_store=vector_store,
         embedding_service=embedding_service,
+    )
+
+    # Arxiv entities
+    arxiv_fetcher: providers.Singleton[ArxivFetcher] = providers.Singleton(
+        ArxivFetcher,
+    )
+
+    # Notion entities
+    notion_uploader: providers.Singleton[MarkdownToNotionUploader] = providers.Singleton(
+        MarkdownToNotionUploader,
+        database_id=config.notion_database_id,
+    )
+    # LLM entities
+    llm_client: providers.Singleton[GeminiApiClient] = providers.Singleton(
+        GeminiApiClient,
+        model_name=config.gemini_model_name,
+    )
+
+    classifier: providers.Singleton[Classifier] = providers.Singleton(
+        Classifier,
+        llm_client=llm_client,
+        path_to_prompt=config.classifier_path_to_prompt,
     )
 
     # Singleton and Callable provider for the Logger resource.
