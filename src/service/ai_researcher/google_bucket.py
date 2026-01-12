@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from google.cloud import storage  # type: ignore
 from loguru import logger
 
-from src.ai_researcher.base_bucket import BaseBucket
+from src.service.ai_researcher.base_bucket import BaseBucket
 
 load_dotenv()
 

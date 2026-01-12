@@ -9,7 +9,8 @@ from loguru import logger
 
 from src.logger.log import DevelopFormatter
 from src.service.ai_researcher.classifier import Classifier
-from src.service.ai_researcher.gemini_researcher import GeminiApiClient
+from src.service.ai_researcher.gemini_client import GeminiApiClient
+from src.service.ai_researcher.summarizer import Summarizer
 from src.service.arxiv.arxiv_fetcher import ArxivFetcher
 from src.service.notion_db.add_content_to_page import MarkdownToNotionUploader
 from src.service.processor import PapersProcessor
@@ -95,6 +96,12 @@ class AppContainer(containers.DeclarativeContainer):
         Classifier,
         llm_client=llm_client,
         path_to_prompt=config.classifier_path_to_prompt,
+    )
+
+    summarizer: providers.Singleton[Summarizer] = providers.Singleton(
+        Summarizer,
+        llm_client=llm_client,
+        path_to_prompt=config.summarizer_path_to_prompt,
     )
 
     # Singleton and Callable provider for the Logger resource.

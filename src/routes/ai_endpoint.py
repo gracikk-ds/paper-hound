@@ -3,7 +3,6 @@
 import os
 from pathlib import Path
 
-import aiofiles
 from dependency_injector.wiring import Provide, inject
 from fastapi import Depends, Form
 from loguru import logger
@@ -11,7 +10,7 @@ from loguru import logger
 from src.containers.containers import AppContainer
 from src.routes.routers import processor_router
 from src.service.ai_researcher.classifier import Classifier
-from src.service.ai_researcher.gemini_researcher import GeminiApiClient
+from src.service.ai_researcher.summarizer import Summarizer
 from src.service.arxiv.arxiv_fetcher import ArxivFetcher
 from src.service.notion_db.add_content_to_page import MarkdownToNotionUploader
 from src.utils.images_utils import add_images_to_md, extract_images
@@ -19,7 +18,6 @@ from src.utils.load_utils import download_pdf
 from src.utils.schemas import Paper
 
 ProcessorResponseModel = list[Paper]
-DEFAULT_SUMMARIZER_PROMPT_PATH = "prompts/summarizer.txt"
 
 
 def load_pdf_and_images(paper: Paper) -> tuple[Path | None, Path | None]:
@@ -50,7 +48,7 @@ async def summarize_paper(
     summarizer_prompt: str | None = Form(None),
     notion_uploader: MarkdownToNotionUploader = Depends(Provide[AppContainer.notion_uploader]),  # noqa: B008
     arxiv_fetcher: ArxivFetcher = Depends(Provide[AppContainer.arxiv_fetcher]),  # noqa: B008
-    summarizer: GeminiApiClient = Depends(Provide[AppContainer.llm_client]),  # noqa: B008
+    summarizer: Summarizer = Depends(Provide[AppContainer.summarizer]),  # noqa: B008
 ) -> str | None:
     """Summarize paper endpoint.
 
@@ -59,7 +57,7 @@ async def summarize_paper(
         summarizer_prompt (str | None): the prompt to use for the summarizer.
         notion_uploader (MarkdownToNotionUploader): Class to upload markdown files to Notion.
         arxiv_fetcher (ArxivFetcher): Class to fetch and filter arXiv papers.
-        summarizer (GeminiApiClient): Class to interact with the Gemini API.
+        summarizer (Summarizer): Class to summarize papers.
 
     Returns:
         str | None: the URL of the created Notion page, None if an error occurred.
@@ -70,13 +68,8 @@ async def summarize_paper(
     if tmp_pdf_path is None or tmp_images_path is None:
         return None
 
-    # Load summarizer prompt if not provided
-    if summarizer_prompt is None:
-        async with aiofiles.open(DEFAULT_SUMMARIZER_PROMPT_PATH, encoding="utf-8") as summary_file:
-            summary_prompt = await summary_file.read()
-
     # Summarize paper
-    _, md_path = summarizer(summary_prompt, pdf_local_path=str(tmp_pdf_path))
+    _, md_path = summarizer.summarize(paper, tmp_pdf_path, summarizer_prompt)
     if md_path is None:
         logger.error(f"Error summarizing paper: {paper.title}")
         return None

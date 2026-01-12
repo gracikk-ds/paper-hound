@@ -1,6 +1,6 @@
 """Classifier for research papers."""
 
-from src.ai_researcher.gemini_researcher import GeminiApiClient
+from src.service.ai_researcher.gemini_client import GeminiApiClient
 
 
 class Classifier:
@@ -13,10 +13,10 @@ class Classifier:
             llm_client (GeminiApiClient): The Gemini API client.
             path_to_prompt (str): The path to the prompt file.
         """
-        self.gemini_researcher = llm_client
+        self.llm_client = llm_client
         with open(path_to_prompt) as file:
             system_prompt = file.read()
-        self.gemini_researcher.system_prompt = system_prompt
+        self.llm_client.system_prompt = system_prompt
 
     @property
     def system_prompt(self) -> str:
@@ -25,7 +25,7 @@ class Classifier:
         Returns:
             str: The system prompt.
         """
-        return self.gemini_researcher.system_prompt
+        return self.llm_client.system_prompt
 
     @system_prompt.setter
     def system_prompt(self, prompt: str) -> None:
@@ -34,7 +34,7 @@ class Classifier:
         Args:
             prompt (str): The system prompt to use.
         """
-        self.gemini_researcher.system_prompt = prompt
+        self.llm_client.system_prompt = prompt
 
     def classify(
         self,
@@ -56,4 +56,5 @@ class Classifier:
         if system_prompt is not None:
             self.system_prompt = system_prompt
         prompt = f"Title: {title}\nSummary: {summary}"
-        return self.gemini_researcher.ask(prompt).lower() == "yes"
+        response = self.llm_client.ask(prompt).text
+        return response is not None and response.lower() == "yes"

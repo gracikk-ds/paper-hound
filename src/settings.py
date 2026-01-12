@@ -31,6 +31,7 @@ class Settings(BaseSettings):
 
     gemini_model_name: str = Field("gemini-2.5-pro", description="Gemini model name.")
     classifier_path_to_prompt: str = Field("prompts/classifier.txt", description="Path to the classifier prompt.")
+    summarizer_path_to_prompt: str = Field("prompts/summarizer.txt", description="Path to the summarizer prompt.")
     telegram_token: str = Field(..., description="Telegram bot token.")
     telegram_chat_id: int = Field(..., description="Chat ID to send notifications to.")
 

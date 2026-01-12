@@ -2,7 +2,6 @@
 
 import json
 import os
-from pathlib import Path
 
 from dotenv import load_dotenv
 from google import genai
@@ -11,13 +10,14 @@ from google.genai.types import (
     Content,
     FileData,
     GenerateContentConfig,
+    GenerateContentResponse,
     HttpOptions,
     Part,
     ThinkingConfig,
 )
 from loguru import logger
 
-from src.ai_researcher.google_bucket import GoogleBucket
+from src.service.ai_researcher.google_bucket import GoogleBucket
 from src.utils.price_caculation import calculate_inference_price
 
 load_dotenv()
@@ -29,13 +29,12 @@ class GeminiApiClient:
     prediction_timeout: int = 120
     location: str = "us-central1"
 
-    def __init__(  # noqa: PLR0913
+    def __init__(
         self,
         model_name: str = "gemini-2.5-pro",
         system_prompt: str | None = None,
         temperature: float = 0.3,
         thinking_budget: int | None = None,
-        site_reports_dir: str = "reports/",
         *,
         verbose: bool = False,
     ) -> None:
@@ -46,13 +45,15 @@ class GeminiApiClient:
             system_prompt: The system prompt to use.
             temperature: The temperature to use.
             thinking_budget: The thinking budget to use.
-            site_reports_dir: The directory to save the reports to.
             verbose: Whether to log the prompt to Gemini.
         """
+        # Initialize aiplatform
         self._load_project_id_from_creds()
         self.model_name = model_name
         aiplatform.init(project=self.project, location=self.location)
         logger.info("aiplatform has been initialized.")
+
+        # Initialize the gemini client
         self.client = genai.Client(
             vertexai=True,
             project=self.project,
@@ -60,15 +61,17 @@ class GeminiApiClient:
             http_options=HttpOptions(timeout=self.prediction_timeout * 1000),
         )
         logger.info("gemini client has been initialized.")
-        self.temperature = temperature
-        self.thinking_budget = thinking_budget if thinking_budget is not None else -1
+
+        # Initialize the bucket
         self.bucket = GoogleBucket(bucket_prefix="pdfs")
         logger.info("google bucket has been initialized.")
-        self.site_reports_dir = site_reports_dir
+
+        # Set the attributes
+        self.temperature = temperature
+        self.thinking_budget = thinking_budget if thinking_budget is not None else -1
         self._system_prompt = system_prompt
         self.file_uris: list[str] = []
-        self.total_input_token_count: int = 0
-        self.total_output_token_count: int = 0
+        self.total_inference_price: float = 0.0
         self.total_requests: int = 0
         self.verbose = verbose
 
@@ -112,14 +115,25 @@ class GeminiApiClient:
             raise ValueError(msg)  # noqa: TRY004
         self._system_prompt = prompt
 
-    def info(self) -> None:
-        """Print the info about the client."""
+    def calculate_stats(self, response: GenerateContentResponse) -> None:
+        """Calculate the stats for the response.
+
+        Args:
+            response (GenerateContentResponse): The response from Gemini.
+        """
+        # Calculate the stats
+        prompt_token_count = getattr(response.usage_metadata, "prompt_token_count", 0)
+        candidates_token_count = getattr(response.usage_metadata, "candidates_token_count", 0)
+        thoughts_token_count = getattr(response.usage_metadata, "thoughts_token_count", 0)
+
         inference_price = calculate_inference_price(
             model_name=self.model_name,
-            total_input_token_count=self.total_input_token_count,
-            total_output_token_count=self.total_output_token_count,
+            total_input_token_count=prompt_token_count,
+            total_output_token_count=candidates_token_count + thoughts_token_count,
         )
-        logger.info(f"Total processed: {self.total_requests}. Spent: {inference_price:.4f}$")
+
+        self.total_requests += 1
+        self.total_inference_price += inference_price
 
     def attach_pdf(self, gcs_uri: str) -> None:
         """Attach a PDF (or text file) for native processing.
@@ -133,7 +147,7 @@ class GeminiApiClient:
         """Clear all attached document URIs."""
         self.file_uris = []
 
-    def ask(self, user_prompt: str, thinking_budget: int | None = None) -> str:
+    def ask(self, user_prompt: str, thinking_budget: int | None = None) -> GenerateContentResponse:
         """Send a prompt to Gemini, with optional system, PDF, and image inputs.
 
         Args:
@@ -141,7 +155,7 @@ class GeminiApiClient:
             thinking_budget (Optional[int]): The thinking budget to use.
 
         Returns:
-            str: The generated text response.
+            GenerateContentResponse: The generated content response.
         """
         if thinking_budget is None:
             thinking_budget = self.thinking_budget
@@ -162,9 +176,9 @@ class GeminiApiClient:
 
         # User message
         contents.append(Content(role="user", parts=[Part(text=user_prompt)]))
-        if self.verbose:
-            logger.info(f"Sending prompt to Gemini: {user_prompt}")
-        response = self.client.models.generate_content(
+
+        # Generate the content
+        return self.client.models.generate_content(
             model=self.model_name,
             contents=contents,  # type: ignore
             config=GenerateContentConfig(
@@ -172,53 +186,16 @@ class GeminiApiClient:
                 thinking_config=ThinkingConfig(thinking_budget=thinking_budget),
             ),
         )
-        prompt_token_count = getattr(response.usage_metadata, "prompt_token_count", 0)
-        candidates_token_count = getattr(response.usage_metadata, "candidates_token_count", 0)
-        thoughts_token_count = getattr(response.usage_metadata, "thoughts_token_count", 0)
-        self.total_input_token_count += prompt_token_count if prompt_token_count is not None else 0
-        self.total_output_token_count += candidates_token_count if candidates_token_count is not None else 0
-        self.total_output_token_count += thoughts_token_count if thoughts_token_count is not None else 0
-        self.total_requests += 1
 
-        return response.text  # type: ignore
-
-    def save_response(self, response: str, pdf_local_path: str | None = None) -> str | None:
-        """Save the response to a markdown file.
-
-        Args:
-            response (str): The response to save.
-            pdf_local_path (Optional[str]): The local path to the PDF file to attach.
-
-        Returns:
-            Optional[str]: The path to the markdown file.
-        """
-        pdf_stem = Path(pdf_local_path).stem if pdf_local_path is not None else None
-        month_dir_name = os.path.basename(os.path.dirname(pdf_local_path)) if pdf_local_path is not None else None
-        if pdf_stem is not None and month_dir_name is not None:
-            base_dir = os.path.join(self.site_reports_dir, month_dir_name)
-            os.makedirs(base_dir, exist_ok=True)
-            md_path = os.path.join(base_dir, f"{pdf_stem}.md")
-            with open(md_path, "w", encoding="utf-8") as response_file:
-                response_file.write(response)
-            return md_path
-        return None
-
-    def __call__(
-        self,
-        user_prompt: str,
-        pdf_local_path: str | None = None,
-        *,
-        save_to_file: bool = True,
-    ) -> tuple[str, str | None]:
+    def __call__(self, user_prompt: str, pdf_local_path: str | None = None) -> str | None:
         """Send a prompt to Gemini, with optional system, PDF, and image inputs.
 
         Args:
             user_prompt (str): The user prompt to send to Gemini.
             pdf_local_path (Optional[str]): The local path to the PDF file to attach.
-            save_to_file (bool): Whether to save the response to a markdown file.
 
         Returns:
-            tuple[str, str | None]: The generated text response and the path to the markdown file.
+            str | None: The generated text response.
         """
         # Attach the PDF file if provided
         if pdf_local_path is not None:
@@ -227,22 +204,11 @@ class GeminiApiClient:
 
         # Send the prompt to Gemini
         response = self.ask(user_prompt)
+        self.calculate_stats(response)
 
         # Remove the PDF file from the bucket
         if pdf_local_path is not None:
             self.clear_pdfs()
             self.bucket.remove_file(pdf_uri)
 
-        # Save the response to a markdown file
-        path_to_md = None
-        if save_to_file:
-            path_to_md = self.save_response(response, pdf_local_path)
-
-        return response, path_to_md
-
-
-if __name__ == "__main__":
-    client = GeminiApiClient()
-    with open("prompts/summarizer.txt", encoding="utf-8") as summary_file:
-        summary_prompt = summary_file.read()
-    response, md_path = client(summary_prompt, pdf_local_path="pdfs/mgie.pdf")
+        return response.text
