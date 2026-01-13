@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+from loguru import logger
+
 from src.service.ai_researcher.gemini_client import GeminiApiClient
 from src.utils.schemas import Paper
 
@@ -16,6 +18,8 @@ class Summarizer:
             llm_client (GeminiApiClient): The Gemini API client.
             path_to_prompt (str): The path to the prompt file.
         """
+        self.total_price: float = 0.0
+        self.inference_price: float = 0.0
         self.llm_client = llm_client
         with open(path_to_prompt, encoding="utf-8") as file:
             self.default_prompt = file.read()
@@ -39,6 +43,9 @@ class Summarizer:
         prompt = summarizer_prompt if summarizer_prompt is not None else self.default_prompt
 
         response_text = self.llm_client(prompt, pdf_local_path=str(pdf_path))
+        self.inference_price = self.llm_client.inference_price
+        self.total_price += self.inference_price
+        logger.info(f"Summarizer inference price: {self.llm_client.inference_price}")
 
         if response_text is None:
             return None, None

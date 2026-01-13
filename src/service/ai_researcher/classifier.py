@@ -1,5 +1,7 @@
 """Classifier for research papers."""
 
+from loguru import logger
+
 from src.service.ai_researcher.gemini_client import GeminiApiClient
 
 
@@ -13,6 +15,8 @@ class Classifier:
             llm_client (GeminiApiClient): The Gemini API client.
             path_to_prompt (str): The path to the prompt file.
         """
+        self.total_price: float = 0.0
+        self.inference_price: float = 0.0
         self.llm_client = llm_client
         with open(path_to_prompt) as file:
             system_prompt = file.read()
@@ -57,4 +61,7 @@ class Classifier:
             self.system_prompt = system_prompt
         prompt = f"Title: {title}\nSummary: {summary}"
         response = self.llm_client.ask(prompt).text
+        self.inference_price = self.llm_client.inference_price
+        self.total_price += self.inference_price
+        logger.info(f"Classifier inference price: {self.llm_client.inference_price}")
         return response is not None and response.lower() == "yes"

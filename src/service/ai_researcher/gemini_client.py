@@ -2,6 +2,7 @@
 
 import json
 import os
+from typing import Literal
 
 from dotenv import load_dotenv
 from google import genai
@@ -14,6 +15,7 @@ from google.genai.types import (
     HttpOptions,
     Part,
     ThinkingConfig,
+    ThinkingLevel,
 )
 from loguru import logger
 
@@ -27,14 +29,14 @@ class GeminiApiClient:
     """Gemini Api Client class."""
 
     prediction_timeout: int = 120
-    location: str = "us-central1"
+    location: str = "global"
 
     def __init__(
         self,
-        model_name: str = "gemini-2.5-pro",
+        model_name: str = "gemini-3-flash-preview",
         system_prompt: str | None = None,
         temperature: float = 0.3,
-        thinking_budget: int | None = None,
+        thinking_level: Literal["LOW", "MEDIUM", "HIGH"] = "LOW",
         *,
         verbose: bool = False,
     ) -> None:
@@ -44,7 +46,7 @@ class GeminiApiClient:
             model_name: The model to use.
             system_prompt: The system prompt to use.
             temperature: The temperature to use.
-            thinking_budget: The thinking budget to use.
+            thinking_level: The thinking level to use.
             verbose: Whether to log the prompt to Gemini.
         """
         # Initialize aiplatform
@@ -68,11 +70,12 @@ class GeminiApiClient:
 
         # Set the attributes
         self.temperature = temperature
-        self.thinking_budget = thinking_budget if thinking_budget is not None else -1
+        self.thinking_level = ThinkingLevel(thinking_level.upper())
         self._system_prompt = system_prompt
         self.file_uris: list[str] = []
         self.total_inference_price: float = 0.0
         self.total_requests: int = 0
+        self.inference_price: float = 0.0
         self.verbose = verbose
 
     def _load_project_id_from_creds(self) -> None:
@@ -122,18 +125,20 @@ class GeminiApiClient:
             response (GenerateContentResponse): The response from Gemini.
         """
         # Calculate the stats
-        prompt_token_count = getattr(response.usage_metadata, "prompt_token_count", 0)
-        candidates_token_count = getattr(response.usage_metadata, "candidates_token_count", 0)
-        thoughts_token_count = getattr(response.usage_metadata, "thoughts_token_count", 0)
+        prompt_token_count = getattr(response.usage_metadata, "prompt_token_count", 0) or 0
+        candidates_token_count = getattr(response.usage_metadata, "candidates_token_count", 0) or 0
+        thoughts_token_count = getattr(response.usage_metadata, "thoughts_token_count", 0) or 0
+        cached_content_token_count = getattr(response.usage_metadata, "cached_content_token_count", 0) or 0
 
-        inference_price = calculate_inference_price(
+        self.inference_price = calculate_inference_price(
             model_name=self.model_name,
             total_input_token_count=prompt_token_count,
+            cached_content_token_count=cached_content_token_count,
             total_output_token_count=candidates_token_count + thoughts_token_count,
         )
 
         self.total_requests += 1
-        self.total_inference_price += inference_price
+        self.total_inference_price += self.inference_price
 
     def attach_pdf(self, gcs_uri: str) -> None:
         """Attach a PDF (or text file) for native processing.
@@ -147,19 +152,15 @@ class GeminiApiClient:
         """Clear all attached document URIs."""
         self.file_uris = []
 
-    def ask(self, user_prompt: str, thinking_budget: int | None = None) -> GenerateContentResponse:
+    def ask(self, user_prompt: str) -> GenerateContentResponse:
         """Send a prompt to Gemini, with optional system, PDF, and image inputs.
 
         Args:
             user_prompt (str): The user prompt to send to Gemini.
-            thinking_budget (Optional[int]): The thinking budget to use.
 
         Returns:
             GenerateContentResponse: The generated content response.
         """
-        if thinking_budget is None:
-            thinking_budget = self.thinking_budget
-
         contents: list[Content] = []
 
         # System instruction
@@ -178,14 +179,16 @@ class GeminiApiClient:
         contents.append(Content(role="user", parts=[Part(text=user_prompt)]))
 
         # Generate the content
-        return self.client.models.generate_content(
+        response = self.client.models.generate_content(
             model=self.model_name,
             contents=contents,  # type: ignore
             config=GenerateContentConfig(
                 temperature=self.temperature,
-                thinking_config=ThinkingConfig(thinking_budget=thinking_budget),
+                thinking_config=ThinkingConfig(thinking_level=self.thinking_level),
             ),
         )
+        self.calculate_stats(response)
+        return response
 
     def __call__(self, user_prompt: str, pdf_local_path: str | None = None) -> str | None:
         """Send a prompt to Gemini, with optional system, PDF, and image inputs.
@@ -204,7 +207,6 @@ class GeminiApiClient:
 
         # Send the prompt to Gemini
         response = self.ask(user_prompt)
-        self.calculate_stats(response)
 
         # Remove the PDF file from the bucket
         if pdf_local_path is not None:
