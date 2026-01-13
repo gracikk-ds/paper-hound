@@ -27,3 +27,57 @@ class Paper(BaseModel):
     updated_date_ts: float
     pdf_url: str
     primary_category: str
+
+
+class PaperSearchRequest(BaseModel):
+    """Request model for searching papers."""
+
+    query: str
+    top_k: int = 10
+    threshold: float = 0.65
+    start_date_str: str | None = None
+    end_date_str: str | None = None
+
+
+class FindSimilarPapersRequest(BaseModel):
+    """Request model for finding similar papers."""
+
+    paper_id: str
+    top_k: int = 5
+    threshold: float = 0.65
+    start_date_str: str | None = None
+    end_date_str: str | None = None
+
+
+class DateRangeRequest(BaseModel):
+    """Request model for date range operations."""
+
+    start_date_str: str
+    end_date_str: str
+
+
+class DeletePapersRequest(BaseModel):
+    """Request model for deleting papers."""
+
+    paper_ids: list[str]
+
+
+class WorkflowRunRequest(BaseModel):
+    """Request model for running the workflow."""
+
+    date_str: str | None = None
+
+
+class SummarizeRequest(BaseModel):
+    """Request model for summarizing a paper."""
+
+    paper_id: str
+    summarizer_prompt: str | None = None
+    category: str = "AdHoc Research"
+
+
+class ClassifyRequest(BaseModel):
+    """Request model for classifying a paper."""
+
+    paper_id: str
+    classifier_system_prompt: str | None = None

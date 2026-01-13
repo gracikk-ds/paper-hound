@@ -3,62 +3,61 @@
 from datetime import datetime
 
 from dependency_injector.wiring import Provide, inject
-from fastapi import Depends, Form, HTTPException
+from fastapi import Depends, HTTPException
 
 from src.containers.containers import AppContainer
 from src.routes.routers import processor_router
 from src.service.processor import PapersProcessor
-from src.utils.schemas import Paper
+from src.utils.schemas import DateRangeRequest, DeletePapersRequest, FindSimilarPapersRequest, Paper, PaperSearchRequest
 
 ProcessorResponseModel = list[Paper]
 
 
-@processor_router.post("/insert-papers", response_model=None)
+@processor_router.post("/insert-papers", status_code=201)
 @inject
 def insert_papers(
-    start_date_str: str = Form(...),
-    end_date_str: str = Form(...),
+    request: DateRangeRequest,
     processor: PapersProcessor = Depends(Provide[AppContainer.processor]),  # noqa: B008
 ) -> None:
     """Insert papers endpoint.
 
     Args:
-        start_date_str (str): start date.
-        end_date_str (str): end date.
+        request (DateRangeRequest): request model.
         processor (PapersProcessor): service for processor.
     """
-    start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()  # noqa: DTZ007
-    end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()  # noqa: DTZ007
-    processor.insert_papers(start_date, end_date)
+    try:
+        start_date = datetime.strptime(request.start_date_str, "%Y-%m-%d").date()  # noqa: DTZ007
+        end_date = datetime.strptime(request.end_date_str, "%Y-%m-%d").date()  # noqa: DTZ007
+        processor.insert_papers(start_date, end_date)
+    except ValueError as err:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD") from err
 
 
 @processor_router.post("/search-papers", response_model=ProcessorResponseModel)
 @inject
-def search_papers(  # noqa: PLR0913
-    query: str = Form(...),
-    top_k: int = Form(10),
-    threshold: float = Form(0.65),
-    start_date_str: str | None = Form(None),
-    end_date_str: str | None = Form(None),
+def search_papers(
+    request: PaperSearchRequest,
     processor: PapersProcessor = Depends(Provide[AppContainer.processor]),  # noqa: B008
 ) -> ProcessorResponseModel:
     """Search papers endpoint.
 
     Args:
-        query (str): query.
-        top_k (int): top k.
-        threshold (float): threshold.
-        start_date_str (str | None): start date.
-        end_date_str (str | None): end date.
+        request (PaperSearchRequest): request model.
         processor (PapersProcessor): service for processor.
     """
-    return processor.search_papers(query, top_k, threshold, start_date_str, end_date_str)
+    return processor.search_papers(
+        request.query,
+        request.top_k,
+        request.threshold,
+        request.start_date_str,
+        request.end_date_str,
+    )
 
 
-@processor_router.get("/get-paper-by-id", response_model=Paper)
+@processor_router.get("/papers/{paper_id}", response_model=Paper)
 @inject
 def get_paper_by_id(
-    paper_id: str = Form(...),
+    paper_id: str,
     processor: PapersProcessor = Depends(Provide[AppContainer.processor]),  # noqa: B008
 ) -> Paper:
     """Get paper by id endpoint.
@@ -75,40 +74,38 @@ def get_paper_by_id(
 
 @processor_router.post("/find-similar-papers", response_model=ProcessorResponseModel)
 @inject
-def find_similar_papers(  # noqa: PLR0913
-    paper_id: str = Form(...),
-    top_k: int = Form(5),
-    threshold: float = Form(0.65),
-    start_date_str: str | None = Form(None),
-    end_date_str: str | None = Form(None),
+def find_similar_papers(
+    request: FindSimilarPapersRequest,
     processor: PapersProcessor = Depends(Provide[AppContainer.processor]),  # noqa: B008
 ) -> ProcessorResponseModel:
     """Find similar papers endpoint.
 
     Args:
-        paper_id (str): paper id.
-        top_k (int): top k.
-        threshold (float): threshold.
-        start_date_str (str | None): start date.
-        end_date_str (str | None): end date.
+        request (FindSimilarPapersRequest): request model.
         processor (PapersProcessor): service for processor.
     """
-    return processor.find_similar_papers(paper_id, top_k, threshold, start_date_str, end_date_str)
+    return processor.find_similar_papers(
+        request.paper_id,
+        request.top_k,
+        request.threshold,
+        request.start_date_str,
+        request.end_date_str,
+    )
 
 
-@processor_router.post("/delete-papers", response_model=None)
+@processor_router.post("/delete-papers", status_code=204)
 @inject
 def delete_papers(
-    paper_ids: list[str] = Form(...),  # noqa: B008
+    request: DeletePapersRequest,
     processor: PapersProcessor = Depends(Provide[AppContainer.processor]),  # noqa: B008
 ) -> None:
     """Delete papers endpoint.
 
     Args:
-        paper_ids (list[str]): list of paper ids.
+        request (DeletePapersRequest): request model.
         processor (PapersProcessor): service for processor.
     """
-    processor.delete_papers(paper_ids)
+    processor.delete_papers(request.paper_ids)
 
 
 @processor_router.get("/count-papers", response_model=int)
