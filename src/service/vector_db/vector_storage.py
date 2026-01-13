@@ -3,6 +3,7 @@
 import itertools
 import uuid
 from collections.abc import Iterable
+from datetime import date, datetime
 
 from loguru import logger
 from qdrant_client import QdrantClient
@@ -87,6 +88,14 @@ class QdrantVectorStore:
                 )
             else:
                 logger.info(f"Collection '{self.collection}' already exists.")
+
+            # Ensure payload index for efficient sorting by date
+            self.client.create_payload_index(
+                collection_name=self.collection,
+                field_name="published_date_ts",
+                field_schema=qmodels.PayloadSchemaType.FLOAT,
+                wait=True,
+            )
         except UnexpectedResponse as exp:
             logger.error(f"An API error occurred while ensuring collection '{self.collection}': {exp}")
             raise
@@ -115,20 +124,14 @@ class QdrantVectorStore:
             # Query for the earliest date (ascending order, limit 1)
             min_date_points, _ = self.client.scroll(
                 collection_name=self.collection,
-                order_by=qmodels.OrderBy(
-                    key="published_date_ts",
-                    direction=qmodels.Direction.ASC,
-                ),
+                order_by=qmodels.OrderBy(key="published_date_ts", direction=qmodels.Direction.ASC),
                 limit=1,
                 with_payload=["published_date_ts", "published_date"],  # Fetch only the required field
             )
             # Query for the latest date (descending order, limit 1)
             max_date_points, _ = self.client.scroll(
                 collection_name=self.collection,
-                order_by=qmodels.OrderBy(
-                    key="published_date_ts",
-                    direction=qmodels.Direction.DESC,
-                ),
+                order_by=qmodels.OrderBy(key="published_date_ts", direction=qmodels.Direction.DESC),
                 limit=1,
                 with_payload=["published_date_ts", "published_date"],
             )
@@ -162,7 +165,7 @@ class QdrantVectorStore:
         vectors: Iterable[list[float]],
         payloads: Iterable[Paper],
         batch_size: int = 256,
-    ) -> None:
+    ) -> date | None:
         """Upserts points into Qdrant in memory-efficient batches from iterators.
 
         Args:
@@ -170,6 +173,9 @@ class QdrantVectorStore:
             vectors (Iterable[list[float]]): An iterator of vectors.
             payloads (Iterable[Paper]): An iterator of payloads.
             batch_size (int): The number of points to send in each batch.
+
+        Returns:
+            date | None: The earliest date of the papers.
         """
         self.ensure_collection()
         uuid_ids = [str(uuid.uuid5(uuid.NAMESPACE_URL, id_val)) for id_val in ids]
@@ -194,6 +200,17 @@ class QdrantVectorStore:
         if existing_ids:
             logger.info(f"Skipping {len(existing_ids)} existing points.")
 
+        # find the earliest date in the papers
+        left_payloads = [pay for uuid, pay in zip(uuid_ids, payloads, strict=True) if uuid not in existing_ids]
+        if left_payloads:
+            earliest_paper = min(left_payloads, key=lambda x: x.published_date_ts)
+            earliest_paper_date = datetime.strptime(  # noqa: DTZ007
+                earliest_paper.published_date,
+                "%Y-%m-%dT%H:%M:%S%fZ",
+            ).date()
+        else:
+            earliest_paper_date = None
+
         points_iter = (
             qmodels.PointStruct(id=uuid_id, vector=vec, payload=pay.model_dump())
             for uuid_id, vec, pay in zip(uuid_ids, vectors, payloads, strict=True)
@@ -217,11 +234,13 @@ class QdrantVectorStore:
             except Exception as exp:
                 logger.error(f"Failed to upsert batch {batch_num}: {exp}")
                 raise
+        return earliest_paper_date
 
     def search(
         self,
         query_vector: list[float],
         limit: int = 10,
+        threshold: float = 0.65,
         q_filter: qmodels.Filter | None = None,
     ) -> list[qmodels.ScoredPoint]:
         """Searches for similar vectors.
@@ -229,6 +248,7 @@ class QdrantVectorStore:
         Args:
             query_vector (list[float]): The vector to search for.
             limit (int): The maximum number of results to return.
+            threshold (float): The threshold for the similarity score.
             q_filter (qmodels.Filter | None): A filter to apply to the search.
 
         Returns:
@@ -241,6 +261,7 @@ class QdrantVectorStore:
                 query_vector=query_vector,
                 limit=limit,
                 query_filter=q_filter,
+                score_threshold=threshold,
             )
         except Exception as exp:  # noqa: BLE001
             logger.error(f"An error occurred during search: {exp}")
