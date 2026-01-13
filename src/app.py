@@ -16,7 +16,7 @@ from src.metrics.asgi_metrics import metrics_endpoint
 from src.middleware.metrics import PrometheusMiddleware
 from src.middleware.process_time import ProcessTimeMiddleware
 from src.routes import ai_endpoint, health_endpoints, processor_endpoints, workflow_endpoints  # noqa: F401
-from src.routes.routers import processor_router, status_check_bp, storage_router, workflow_router
+from src.routes.routers import processor_router, status_check_bp, workflow_router
 from src.settings import settings
 
 
@@ -73,7 +73,6 @@ def create_app() -> FastAPI:
     app.add_exception_handler(Exception, handle_unexpected_exception)
 
     app.include_router(status_check_bp, prefix="/health", tags=["status_check"])
-    app.include_router(storage_router, prefix="/storage", tags=["storage"])
     app.include_router(processor_router, prefix="/processor", tags=["processor"])
     app.include_router(workflow_router, prefix="/workflow", tags=["workflow"])
     app.add_route("/metrics", metrics_endpoint)

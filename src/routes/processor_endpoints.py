@@ -3,7 +3,7 @@
 from datetime import datetime
 
 from dependency_injector.wiring import Provide, inject
-from fastapi import Depends, Form
+from fastapi import Depends, Form, HTTPException
 
 from src.containers.containers import AppContainer
 from src.routes.routers import processor_router
@@ -15,7 +15,7 @@ ProcessorResponseModel = list[Paper]
 
 @processor_router.post("/insert-papers", response_model=None)
 @inject
-async def insert_papers(
+def insert_papers(
     start_date_str: str = Form(...),
     end_date_str: str = Form(...),
     processor: PapersProcessor = Depends(Provide[AppContainer.processor]),  # noqa: B008
@@ -34,7 +34,7 @@ async def insert_papers(
 
 @processor_router.post("/search-papers", response_model=ProcessorResponseModel)
 @inject
-async def search_papers(  # noqa: PLR0913
+def search_papers(  # noqa: PLR0913
     query: str = Form(...),
     top_k: int = Form(10),
     threshold: float = Form(0.65),
@@ -55,24 +55,27 @@ async def search_papers(  # noqa: PLR0913
     return processor.search_papers(query, top_k, threshold, start_date_str, end_date_str)
 
 
-@processor_router.get("/get-paper-by-id", response_model=Paper | None)
+@processor_router.get("/get-paper-by-id", response_model=Paper)
 @inject
-async def get_paper_by_id(
+def get_paper_by_id(
     paper_id: str = Form(...),
     processor: PapersProcessor = Depends(Provide[AppContainer.processor]),  # noqa: B008
-) -> Paper | None:
+) -> Paper:
     """Get paper by id endpoint.
 
     Args:
         paper_id (str): paper id.
         processor (PapersProcessor): service for processor.
     """
-    return processor.get_paper_by_id(paper_id)
+    paper = processor.get_paper_by_id(paper_id)
+    if paper is None:
+        raise HTTPException(status_code=404, detail="Paper not found")
+    return paper
 
 
 @processor_router.post("/find-similar-papers", response_model=ProcessorResponseModel)
 @inject
-async def find_similar_papers(  # noqa: PLR0913
+def find_similar_papers(  # noqa: PLR0913
     paper_id: str = Form(...),
     top_k: int = Form(5),
     threshold: float = Form(0.65),
@@ -95,7 +98,7 @@ async def find_similar_papers(  # noqa: PLR0913
 
 @processor_router.post("/delete-papers", response_model=None)
 @inject
-async def delete_papers(
+def delete_papers(
     paper_ids: list[str] = Form(...),  # noqa: B008
     processor: PapersProcessor = Depends(Provide[AppContainer.processor]),  # noqa: B008
 ) -> None:
@@ -110,7 +113,7 @@ async def delete_papers(
 
 @processor_router.get("/count-papers", response_model=int)
 @inject
-async def count_papers(
+def count_papers(
     processor: PapersProcessor = Depends(Provide[AppContainer.processor]),  # noqa: B008
 ) -> int:
     """Count papers endpoint.

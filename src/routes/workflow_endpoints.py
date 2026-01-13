@@ -12,7 +12,7 @@ from src.service.workflow import WorkflowService
 
 @workflow_router.post("/run", response_model=None)
 @inject
-async def run_workflow(
+def run_workflow(
     date_str: str | None = Form(None),
     workflow: WorkflowService = Depends(Provide[AppContainer.workflow]),  # noqa: B008
 ) -> dict[str, str]:

@@ -1,7 +1,7 @@
 """Ai endpoints."""
 
 from dependency_injector.wiring import Provide, inject
-from fastapi import Depends, Form
+from fastapi import Depends, Form, HTTPException
 from loguru import logger
 
 from src.containers.containers import AppContainer
@@ -17,7 +17,7 @@ ProcessorResponseModel = list[Paper]
 
 @processor_router.post("/summarize-paper", response_model=None)
 @inject
-async def summarize_paper(
+def summarize_paper(
     paper_id: str = Form(...),
     summarizer_prompt: str | None = Form(None),
     category: str = Form("AdHoc Research"),
@@ -34,16 +34,20 @@ async def summarize_paper(
     Returns:
         str | None: the URL of the created Notion page, None if an error occurred.
     """
-    return workflow.process_paper_summary_and_upload(
+    # TODO: Ensure that the paper is not already summarized.
+    result = workflow.process_paper_summary_and_upload(
         paper_id=paper_id,
         summarizer_prompt=summarizer_prompt,
         category=category,
     )
+    if result is None:
+        raise HTTPException(status_code=500, detail="Failed to summarize paper")
+    return result
 
 
 @processor_router.post("/classify-paper", response_model=None)
 @inject
-async def classify_paper(
+def classify_paper(
     paper_id: str = Form(...),
     classifier_system_prompt: str | None = Form(None),
     arxiv_fetcher: ArxivFetcher = Depends(Provide[AppContainer.arxiv_fetcher]),  # noqa: B008
@@ -68,10 +72,10 @@ async def classify_paper(
             paper = arxiv_fetcher.extract_paper_by_name_or_id(paper_id)
         except Exception as exp:  # noqa: BLE001
             logger.error(f"Error fetching paper {paper_id}: {exp}")
-            return None
+            raise HTTPException(status_code=404, detail="Paper not found") from exp
 
     if paper is None:
         logger.error(f"Error extracting paper: {paper_id}")
-        return None
+        raise HTTPException(status_code=404, detail="Paper not found")
 
     return classifier.classify(title=paper.title, summary=paper.summary, system_prompt=classifier_system_prompt)

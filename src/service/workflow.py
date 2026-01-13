@@ -143,15 +143,21 @@ class WorkflowService:
             logger.error(f"Error inserting papers for {current_date_str}: {exp}")
         return updated_start_date_str, current_date_str, costs
 
-    def process_daily_cycle(self, date: datetime.date | None = None, top_k: int = 10) -> None:
+    def process_daily_cycle(
+        self,
+        date: datetime.date | None = None,
+        top_k: int = 10,
+        num_days_to_look_back: int = 4,
+    ) -> None:
         """Run the daily paper processing cycle.
 
         Args:
             date (datetime.date | None): The date to process. Defaults to yesterday.
             top_k (int): The number of papers to return. Defaults to 10.
+            num_days_to_look_back (int): The number of days to look back. Defaults to 4.
         """
         # 1. Ingest papers
-        date_start_str, date_end_str, embedder_costs = self.daily_ingestion(date)
+        date_start_str, date_end_str, embedder_costs = self.daily_ingestion(date, num_days_to_look_back)
         for category, page_id in self.notion_settings_db_ids.items():
             settings = self.notion_settings_extractor.extract_settings_from_page(page_id)
             if settings is None:
