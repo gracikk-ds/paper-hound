@@ -182,8 +182,7 @@ def add_images_to_md(md_path: str, images_dir: str, paper_info: dict) -> None:
     new_md = f"---\ntitle: {paper_name}\nlayout: default\ndate: {paper_info['published_date']}\n---\n"
     new_md += f"## {paper_info['title']}\n"
     new_md += f"**Authors:**{paper_info['authors']}\n\n"
-    new_md += f"**ArXiv URL:** {paper_info['arxiv_url']}\n\n"
-    new_md += f"**Citation Count:** {paper_info['citation_count']}\n\n"
+    new_md += f"**ArXiv URL:** https://www.alphaxiv.org/abs/{paper_info['paper_id']}\n\n"
     new_md += f"**Published Date:** {paper_info['published_date']}\n\n"
 
     figures = load_images_and_descriptions(images_dir)
