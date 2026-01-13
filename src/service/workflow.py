@@ -29,6 +29,7 @@ class WorkflowService:
         notion_uploader: MarkdownToNotionUploader,
         notion_settings_extractor: NotionPageExtractor,
         notion_settings_db_ids: dict[str, str],
+        threshold: float = 0.65,
     ) -> None:
         """Initialize the WorkflowService.
 
@@ -40,7 +41,9 @@ class WorkflowService:
             notion_uploader (MarkdownToNotionUploader): Service for uploading to Notion.
             notion_settings_db_ids (dict[str, str]): The IDs of the Notion settings databases.
             notion_settings_extractor (NotionPageExtractor): Service for extracting settings from Notion pages.
+            threshold (float): The threshold for the similarity score.
         """
+        self.threshold = threshold
         self.processor = processor
         self.classifier = classifier
         self.summarizer = summarizer
@@ -110,27 +113,35 @@ class WorkflowService:
             if "md_path" in locals() and md_path.exists():
                 md_path.unlink()
 
-    def daily_ingestion(self, date: datetime.date | None = None) -> str:
-        """Ingest papers for a given date.
+    def daily_ingestion(
+        self,
+        date: datetime.date | None = None,
+        num_days_to_look_back: int = 4,
+    ) -> tuple[str, str, float]:
+        """Ingest papers for a given date range.
+
+        We look back num_days_to_look_back days to ensure no papers are missed due to arxiv api delay.
+        If the papers were already ingested for previous days, we won't ingest them again, just skip them.
 
         Args:
             date (datetime.date | None): The date to ingest papers for. Defaults to yesterday.
+            num_days_to_look_back (int): The number of days to look back. Defaults to 4.
 
         Returns:
-            str: The date string.
+            tuple[str, str, float]: The start date string, end date string and the costs of the embedding service.
         """
-        if date is None:
-            date = datetime.date.today() - datetime.timedelta(days=1)  # noqa: DTZ011
+        current_date = date or datetime.date.today()  # noqa: DTZ011
+        current_date_str = current_date.strftime("%Y-%m-%d")
+        start_date = current_date - datetime.timedelta(days=num_days_to_look_back)
 
-        date_str = date.strftime("%Y-%m-%d")
-        logger.info(f"Starting ingestion for {date_str}")
+        logger.info(f"Starting ingestion for {current_date_str}, but looking back {num_days_to_look_back} days.")
 
         # 1. Ingest papers
         try:
-            self.processor.insert_papers(date_str, date_str)
+            updated_start_date_str, costs = self.processor.insert_papers(start_date, current_date)
         except Exception as exp:  # noqa: BLE001
-            logger.error(f"Error inserting papers for {date_str}: {exp}")
-        return date_str
+            logger.error(f"Error inserting papers for {current_date_str}: {exp}")
+        return updated_start_date_str, current_date_str, costs
 
     def process_daily_cycle(self, date: datetime.date | None = None, top_k: int = 10) -> None:
         """Run the daily paper processing cycle.
@@ -140,8 +151,7 @@ class WorkflowService:
             top_k (int): The number of papers to return. Defaults to 10.
         """
         # 1. Ingest papers
-        date_str = self.daily_ingestion(date)
-
+        date_start_str, date_end_str, embedder_costs = self.daily_ingestion(date)
         for category, page_id in self.notion_settings_db_ids.items():
             settings = self.notion_settings_extractor.extract_settings_from_page(page_id)
             if settings is None:
@@ -155,17 +165,19 @@ class WorkflowService:
                 candidates = self.processor.search_papers(
                     query=query,
                     k=top_k,
-                    start_date_str=date_str,
-                    end_date_str=date_str,
+                    threshold=self.threshold,
+                    start_date_str=date_start_str,
+                    end_date_str=date_end_str,
                 )
             except Exception as exp:  # noqa: BLE001
                 logger.error(f"Error searching papers: {exp}")
                 return
-
-            logger.info(f"Found {len(candidates)} candidates for '{query}' on {date_str}")
+            logger.info(f"Found {len(candidates)} candidates for '{query}' on {date_end_str}")
 
             # 3. Filter and Process
             processed_count = 0
+            cls_costs = 0.0
+            sum_costs = 0.0
             for paper in candidates:
                 try:
                     is_relevant = self.classifier.classify(
@@ -173,6 +185,7 @@ class WorkflowService:
                         summary=paper.summary,
                         system_prompt=settings["Classifier Prompt"],
                     )
+                    cls_costs += self.classifier.inference_price
 
                     if is_relevant:
                         logger.info(f"Paper '{paper.title}' classified as relevant. Processing...")
@@ -181,15 +194,17 @@ class WorkflowService:
                             summarizer_prompt=settings["Summarizer Prompt"],
                             category=category,
                         )
+                        sum_costs += self.summarizer.inference_price
                         if url:
                             logger.info(f"Successfully processed '{paper.title}': {url}")
                             processed_count += 1
                     else:
-                        logger.debug(f"Paper '{paper.title}' classified as NOT relevant.")
+                        logger.info(f"Paper '{paper.title}' classified as NOT relevant.")
                 except Exception as exp:  # noqa: BLE001
                     logger.error(f"Error processing candidate '{paper.title}': {exp}")
 
-        logger.info(f"Daily cycle completed. Processed {processed_count} papers.")
+        logger.info(f"Daily cycle costs: {cls_costs + sum_costs + embedder_costs}")
+        logger.info("Daily cycle completed.")
 
     async def run_scheduled_job(self) -> None:
         """Wrapper for the scheduled job."""
