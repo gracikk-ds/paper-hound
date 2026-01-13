@@ -11,14 +11,11 @@ pydantic-settings>=2.10.1
 python-dateutil>=2.9.0.post0
 python-multipart>=0.0.20
 qdrant-client==1.15.1
-sentence-transformers==5.0.0
 starlette-context>=0.4.0
 tqdm>=4.67.1
 uvicorn==0.35.0
-google-cloud-aiplatform==1.71.1
-google-cloud-storage==2.1.0
-google-genai==1.16.1
-google_cloud_resource_manager==1.6.1
+google-cloud-aiplatform==1.132.0
+google-cloud-storage==3.7.0
 grpcio_status==1.49.0rc1
 aiofiles>=25.1.0
 pymupdf>=1.23.0
