@@ -1,5 +1,7 @@
 """Processor endpoints."""
 
+from datetime import datetime
+
 from dependency_injector.wiring import Provide, inject
 from fastapi import Depends, Form
 
@@ -25,14 +27,17 @@ async def insert_papers(
         end_date_str (str): end date.
         processor (PapersProcessor): service for processor.
     """
-    processor.insert_papers(start_date_str, end_date_str)
+    start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()  # noqa: DTZ007
+    end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()  # noqa: DTZ007
+    processor.insert_papers(start_date, end_date)
 
 
 @processor_router.post("/search-papers", response_model=ProcessorResponseModel)
 @inject
-async def search_papers(
+async def search_papers(  # noqa: PLR0913
     query: str = Form(...),
     top_k: int = Form(10),
+    threshold: float = Form(0.65),
     start_date_str: str | None = Form(None),
     end_date_str: str | None = Form(None),
     processor: PapersProcessor = Depends(Provide[AppContainer.processor]),  # noqa: B008
@@ -42,11 +47,12 @@ async def search_papers(
     Args:
         query (str): query.
         top_k (int): top k.
+        threshold (float): threshold.
         start_date_str (str | None): start date.
         end_date_str (str | None): end date.
         processor (PapersProcessor): service for processor.
     """
-    return processor.search_papers(query, top_k, start_date_str, end_date_str)
+    return processor.search_papers(query, top_k, threshold, start_date_str, end_date_str)
 
 
 @processor_router.get("/get-paper-by-id", response_model=Paper | None)
@@ -66,9 +72,12 @@ async def get_paper_by_id(
 
 @processor_router.post("/find-similar-papers", response_model=ProcessorResponseModel)
 @inject
-async def find_similar_papers(
+async def find_similar_papers(  # noqa: PLR0913
     paper_id: str = Form(...),
     top_k: int = Form(5),
+    threshold: float = Form(0.65),
+    start_date_str: str | None = Form(None),
+    end_date_str: str | None = Form(None),
     processor: PapersProcessor = Depends(Provide[AppContainer.processor]),  # noqa: B008
 ) -> ProcessorResponseModel:
     """Find similar papers endpoint.
@@ -76,9 +85,12 @@ async def find_similar_papers(
     Args:
         paper_id (str): paper id.
         top_k (int): top k.
+        threshold (float): threshold.
+        start_date_str (str | None): start date.
+        end_date_str (str | None): end date.
         processor (PapersProcessor): service for processor.
     """
-    return processor.find_similar_papers(paper_id, top_k)
+    return processor.find_similar_papers(paper_id, top_k, threshold, start_date_str, end_date_str)
 
 
 @processor_router.post("/delete-papers", response_model=None)
