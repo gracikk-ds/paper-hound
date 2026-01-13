@@ -75,10 +75,22 @@ class ArxivFetcher:
         Returns:
             tuple[datetime, datetime]: The start and end dates as datetime objects.
         """
-        start_date_obj = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=UTC)
-        end_date_obj = (
-            datetime.strptime(end_date, "%Y-%m-%d").replace(tzinfo=UTC) + timedelta(days=1) - timedelta(seconds=1)
-        )
+        try:
+            start_date_obj = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=UTC)
+        except ValueError:
+            start_date_obj = parser.parse(start_date)
+            if start_date_obj.tzinfo is None:
+                start_date_obj = start_date_obj.replace(tzinfo=UTC)
+
+        try:
+            end_date_obj = (
+                datetime.strptime(end_date, "%Y-%m-%d").replace(tzinfo=UTC) + timedelta(days=1) - timedelta(seconds=1)
+            )
+        except ValueError:
+            end_date_obj = parser.parse(end_date)
+            if end_date_obj.tzinfo is None:
+                end_date_obj = end_date_obj.replace(tzinfo=UTC)
+
         if start_date_obj > end_date_obj:
             msg = "Start date must be before end date."
             raise ValueError(msg)

@@ -29,7 +29,6 @@ class MarkdownToNotionUploader:
             database_id (str): Notion database ID. Default is "228f6f75bb0b80babf73d46a6254a459"
         """
         self.api_token = settings.notion_token
-        self.project_root = settings.site_reports_dir.split("/")[0]
         self.database_id = database_id
         self.base_url = "https://api.notion.com/v1"
         self.headers = {
@@ -215,7 +214,7 @@ class MarkdownToNotionUploader:
                 continue
 
             # Parse images
-            local_path = resolve_image_path(line, self.project_root)
+            local_path = resolve_image_path(line)
             if local_path:
                 self._upload_image(local_path, blocks)
                 continue
