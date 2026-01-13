@@ -68,7 +68,6 @@ class AppContainer(containers.DeclarativeContainer):
     embedding_service: providers.Singleton[EmbeddingService] = providers.Singleton(
         EmbeddingService,
         model_name=config.embedding_service_model_name,
-        device=config.embedding_service_device,
         batch_size=config.embedding_service_batch_size,
     )
 
@@ -79,9 +78,7 @@ class AppContainer(containers.DeclarativeContainer):
     )
 
     # Arxiv entities
-    arxiv_fetcher: providers.Singleton[ArxivFetcher] = providers.Singleton(
-        ArxivFetcher,
-    )
+    arxiv_fetcher: providers.Singleton[ArxivFetcher] = providers.Singleton(ArxivFetcher)
 
     # Notion entities
     notion_uploader: providers.Singleton[MarkdownToNotionUploader] = providers.Singleton(
@@ -106,9 +103,7 @@ class AppContainer(containers.DeclarativeContainer):
         path_to_prompt=config.summarizer_path_to_prompt,
     )
 
-    notion_settings_extractor: providers.Singleton[NotionPageExtractor] = providers.Singleton(
-        NotionPageExtractor,
-    )
+    notion_settings_extractor: providers.Singleton[NotionPageExtractor] = providers.Singleton(NotionPageExtractor)
 
     workflow: providers.Singleton[WorkflowService] = providers.Singleton(
         WorkflowService,
