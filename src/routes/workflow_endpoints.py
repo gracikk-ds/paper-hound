@@ -18,15 +18,30 @@ def run_workflow(
     request: WorkflowRunRequest,
     workflow: WorkflowService = Depends(Provide[AppContainer.workflow]),  # noqa: B008
 ) -> dict[str, str]:
-    """Run the daily workflow manually.
+    """Trigger the paper discovery and summarization workflow.
+
+    Starts a background workflow that fetches new papers from arXiv, optionally
+    classifies them, and generates summaries for relevant papers. The workflow
+    runs asynchronously and returns immediately with acceptance status.
 
     Args:
-        background_tasks (BackgroundTasks): Background tasks.
-        request (WorkflowRunRequest): Request model.
-        workflow (WorkflowService): Workflow service.
+        background_tasks: FastAPI background task manager.
+        request: The workflow configuration containing:
+            - start_date_str (str, optional): Start of date range (YYYY-MM-DD).
+                Defaults to yesterday.
+            - end_date_str (str, optional): End of date range (YYYY-MM-DD).
+                Defaults to today.
+            - skip_ingestion (bool): Skip fetching new papers if True. Defaults to False.
+            - use_classifier (bool): Filter papers using AI classifier. Defaults to True.
+            - top_k (int): Number of top papers to process. Defaults to 10.
+            - category (str, optional): Research category for prompt selection.
+        workflow: Injected workflow service for orchestrating the pipeline.
 
     Returns:
-        dict[str, str]: Status message.
+        Status dict with "status": "accepted" and confirmation message.
+
+    Raises:
+        HTTPException: 400 if date format is invalid (expected YYYY-MM-DD).
     """
     try:
         if request.start_date_str:

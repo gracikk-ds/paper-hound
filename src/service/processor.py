@@ -32,7 +32,7 @@ class PapersProcessor:
         self.vector_store = vector_store
         self.embedding_service = embedding_service
 
-    def insert_papers(self, start_date: date, end_date: date) -> tuple[str, float]:
+    def insert_papers(self, start_date: date, end_date: date) -> float:
         """Insert the papers into the vector store.
 
         Args:
@@ -48,7 +48,6 @@ class PapersProcessor:
         end_date_str = end_date.strftime("%Y-%m-%d")
 
         embedder_costs = 0.0
-        earliest_date = end_date
         for papers in fetch_papers_day_by_day(
             start_date_str,
             end_date_str,
@@ -60,10 +59,8 @@ class PapersProcessor:
             summary_list = [paper.summary for paper in papers]
             summary_embeddings = self.embedding_service.embed_batch(summary_list)
             embedder_costs += self.embedding_service.inference_price
-            earliest_paper_date = self.vector_store.upsert(paper_ids, summary_embeddings, papers)
-            if earliest_paper_date:
-                earliest_date = min(earliest_date, earliest_paper_date)
-        return earliest_date.strftime("%Y-%m-%d"), embedder_costs
+            self.vector_store.upsert(paper_ids, summary_embeddings, papers)
+        return embedder_costs
 
     def search_papers(
         self,

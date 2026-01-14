@@ -22,15 +22,28 @@ def summarize_paper(
     workflow: WorkflowService = Depends(Provide[AppContainer.workflow]),  # noqa: B008
     notion_settings_extractor: NotionPageExtractor = Depends(Provide[AppContainer.notion_settings_extractor]),  # noqa: B008
 ) -> str:
-    """Summarize paper endpoint.
+    """Generate an AI-powered summary of an arXiv paper and publish it to Notion.
+
+    Fetches the specified arXiv paper, generates a detailed summary using the provided
+    (or auto-resolved) summarizer prompt, and creates a new page in Notion with the
+    formatted summary.
 
     Args:
-        request (SummarizeRequest): Request model.
-        workflow (WorkflowService): Workflow service.
-        notion_settings_extractor (NotionPageExtractor): Notion settings extractor.
+        request: The summarization request containing:
+            - paper_id (str): The arXiv paper ID (e.g., "2301.07041") or full URL.
+            - summarizer_prompt (str, optional): Custom prompt for the summarizer.
+                If not provided, automatically resolved from Notion settings based on category.
+            - category (str): The research category for prompt lookup and Notion organization.
+                Defaults to "AdHoc Research".
+        workflow: Injected workflow service for summary generation and upload.
+        notion_settings_extractor: Injected extractor for resolving prompts from Notion.
 
     Returns:
-        str: the URL of the created Notion page.
+        The URL of the newly created Notion page containing the paper summary.
+
+    Raises:
+        HTTPException: 404 if no summarizer prompt found for the specified category.
+        HTTPException: 500 if summary generation or Notion upload fails.
     """
     database_id = api_settings.notion_command_database_id
     if request.category and request.summarizer_prompt is None:
@@ -63,16 +76,32 @@ def classify_paper(
     classifier: Classifier = Depends(Provide[AppContainer.classifier]),  # noqa: B008
     processor: PapersProcessor = Depends(Provide[AppContainer.processor]),  # noqa: B008
 ) -> bool:
-    """Classify paper endpoint.
+    """Classify an arXiv paper based on a custom classification prompt.
+
+    Evaluates whether a paper matches specific criteria defined in your classification
+    prompt. First attempts to retrieve the paper from the local database; if not found,
+    fetches directly from arXiv.
 
     Args:
-        request (ClassifyRequest): Request model.
-        arxiv_fetcher (ArxivFetcher): arxiv fetcher.
-        classifier (Classifier): classifier.
-        processor (PapersProcessor): processor.
+        request: The classification request containing:
+            - paper_id (str): The arXiv paper ID (e.g., "2301.07041") or full URL.
+            - classifier_system_prompt (str): The system prompt defining classification
+                criteria. The classifier analyzes the paper's title and abstract against
+                this prompt to determine relevance.
+        arxiv_fetcher: Injected fetcher for retrieving papers from arXiv.
+        classifier: Injected classifier service for paper evaluation.
+        processor: Injected processor for local database paper lookup.
 
     Returns:
-        bool: True if the paper is about generative image editing, False otherwise.
+        True if the paper matches the classification criteria, False otherwise.
+
+    Raises:
+        HTTPException: 404 if paper not found in local database and arXiv fetch fails.
+
+    Example:
+        Use cases include filtering papers by research domain (e.g., "Is this paper
+        about generative image editing?"), identifying methodology types, or topic
+        screening for literature reviews.
     """
     paper = processor.get_paper_by_id(request.paper_id)
     if paper is None:

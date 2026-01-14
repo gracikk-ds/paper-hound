@@ -20,6 +20,8 @@ from src.utils.load_utils import load_pdf_and_images
 class WorkflowService:
     """Service for managing paper processing workflows."""
 
+    look_back_days: int = 1
+
     def __init__(  # noqa: PLR0913
         self,
         processor: PapersProcessor,
@@ -52,7 +54,7 @@ class WorkflowService:
         self.notion_settings_extractor = notion_settings_extractor
         self.notion_command_database_id = notion_command_database_id
 
-    def _ingest_papers(self, start_date: datetime.date, end_date: datetime.date) -> tuple[str, str, float]:
+    def _ingest_papers(self, start_date: datetime.date, end_date: datetime.date) -> float:
         """Ingest papers for a given date range.
 
         Args:
@@ -60,18 +62,18 @@ class WorkflowService:
             end_date (datetime.date): The end date.
 
         Returns:
-            tuple[str, str, float]: The start date string, end date string and the costs of the embedding service.
+            float: The costs of the embedding service.
         """
         start_date_str = start_date.strftime("%Y-%m-%d")
         end_date_str = end_date.strftime("%Y-%m-%d")
         logger.info(f"Starting ingestion from {start_date_str} to {end_date_str}.")
         try:
-            updated_start_date_str, costs = self.processor.insert_papers(start_date, end_date)
+            costs = self.processor.insert_papers(start_date, end_date)
         except Exception as exp:  # noqa: BLE001
             logger.error(f"Error inserting papers from {start_date_str} to {end_date_str}: {exp}")
-            return start_date_str, end_date_str, 0.0
+            return 0.0
         else:
-            return updated_start_date_str, end_date_str, costs
+            return costs
 
     def prepare_paper_summary_and_upload(  # noqa: PLR0912,PLR0911
         self,
@@ -239,13 +241,13 @@ class WorkflowService:
         date_end_str = end_date.strftime("%Y-%m-%d")
 
         if not skip_ingestion:
-            date_start_str, date_end_str, embedder_costs = self._ingest_papers(start_date, end_date)
+            embedder_costs = self._ingest_papers(start_date, end_date)
 
         total_cls_costs = 0.0
         total_sum_costs = 0.0
         total_processed = 0
 
-        for page_id in self.notion_settings_extractor.query_database(self.notion_command_page_id):
+        for page_id in self.notion_settings_extractor.query_database(self.notion_command_database_id):
             page_settings = self.notion_settings_extractor.extract_settings_from_page(page_id)
             if page_settings is None:
                 logger.error(f"Invalid set of settings for {page_id}.")
@@ -275,7 +277,7 @@ class WorkflowService:
         try:
             # Default behavior: run for today, looking back 4 days
             today = datetime.date.today()  # noqa: DTZ011
-            start_date = today - datetime.timedelta(days=4)
+            start_date = today - datetime.timedelta(days=self.look_back_days)
             loop = asyncio.get_running_loop()
             await loop.run_in_executor(None, lambda: self.run_workflow(start_date=start_date, end_date=today))
         except Exception as exp:  # noqa: BLE001
