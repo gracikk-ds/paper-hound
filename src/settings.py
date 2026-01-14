@@ -30,9 +30,9 @@ class Settings(BaseSettings):
 
     notion_token: str = Field(..., description="Notion API token.")
     notion_database_id: str = Field("228f6f75bb0b80babf73d46a6254a459", description="Notion database ID.")
-    notion_settings_db_ids: dict[str, str] = Field(
-        {"Image Editing": "228f6f75bb0b8023a7aeced6e6799a89"},
-        description="Notion settings database IDs.",
+    notion_command_database_id: str = Field(
+        "228f6f75-bb0b-8048-aa28-ef08ff55f9bf",
+        description="Notion command database ID.",
     )
     aws_access_key_id: str = Field(..., description="AWS access key ID.")
     aws_secret_access_key: str = Field(..., description="AWS secret access key.")

@@ -113,7 +113,7 @@ class AppContainer(containers.DeclarativeContainer):
         arxiv_fetcher=arxiv_fetcher,
         notion_uploader=notion_uploader,
         notion_settings_extractor=notion_settings_extractor,
-        notion_settings_db_ids=config.notion_settings_db_ids,
+        notion_command_database_id=config.notion_command_database_id,
     )
 
     # Singleton and Callable provider for the Logger resource.

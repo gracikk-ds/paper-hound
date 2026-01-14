@@ -39,6 +39,33 @@ class MarkdownToNotionUploader:
         }
         self.bucket = S3Uploader()
 
+    def check_paper_exists(self, arxiv_url: str) -> bool:
+        """Check if a paper with the given ArXiv URL already exists in the database.
+
+        Args:
+            arxiv_url (str): The ArXiv URL to check.
+
+        Returns:
+            bool: True if the paper exists, False otherwise.
+        """
+        url = f"{self.base_url}/databases/{self.database_id}/query"
+        payload = {
+            "filter": {
+                "property": "Arxiv",
+                "url": {
+                    "equals": f"https://www.alphaxiv.org/abs/{arxiv_url}",
+                },
+            },
+        }
+        try:
+            response = requests.post(url, headers=self.headers, json=payload, timeout=30)
+            response.raise_for_status()
+            data = response.json()
+            return len(data.get("results", [])) > 0
+        except Exception as exp:  # noqa: BLE001
+            logger.error(f"Error checking if paper exists: {exp}")
+            return False
+
     def _parse_rich_text(self, line: str) -> list[dict[str, Any]]:
         """Parse a line for **bold** markdown and return Notion rich_text objects.
 

@@ -65,7 +65,12 @@ class DeletePapersRequest(BaseModel):
 class WorkflowRunRequest(BaseModel):
     """Request model for running the workflow."""
 
-    date_str: str | None = None
+    start_date_str: str | None = None
+    end_date_str: str | None = None
+    skip_ingestion: bool = False
+    use_classifier: bool = True
+    top_k: int = 10
+    category: str | None = None
 
 
 class SummarizeRequest(BaseModel):
@@ -80,4 +85,4 @@ class ClassifyRequest(BaseModel):
     """Request model for classifying a paper."""
 
     paper_id: str
-    classifier_system_prompt: str | None = None
+    classifier_system_prompt: str

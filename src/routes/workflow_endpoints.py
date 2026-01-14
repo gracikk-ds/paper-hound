@@ -28,15 +28,30 @@ def run_workflow(
     Returns:
         dict[str, str]: Status message.
     """
-    date_obj = None
-    if request.date_str:
-        try:
-            date_obj = datetime.datetime.strptime(request.date_str, "%Y-%m-%d").date()  # noqa: DTZ007
-        except ValueError as err:
-            raise HTTPException(
-                status_code=400,
-                detail="Invalid date format. Use YYYY-MM-DD.",
-            ) from err
+    try:
+        if request.start_date_str:
+            start_date = datetime.datetime.strptime(request.start_date_str, "%Y-%m-%d").date()  # noqa: DTZ007
+        else:
+            start_date = datetime.date.today() - datetime.timedelta(days=1)  # noqa: DTZ011
 
-    background_tasks.add_task(workflow.process_daily_cycle, date=date_obj)
+        if request.end_date_str:
+            end_date = datetime.datetime.strptime(request.end_date_str, "%Y-%m-%d").date()  # noqa: DTZ007
+        else:
+            end_date = datetime.date.today()  # noqa: DTZ011
+
+    except ValueError as err:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid date format. Use YYYY-MM-DD.",
+        ) from err
+
+    background_tasks.add_task(
+        workflow.run_workflow,
+        start_date=start_date,
+        end_date=end_date,
+        skip_ingestion=request.skip_ingestion,
+        use_classifier=request.use_classifier,
+        top_k=request.top_k,
+        category=request.category,
+    )
     return {"status": "accepted", "message": "Workflow started in background."}

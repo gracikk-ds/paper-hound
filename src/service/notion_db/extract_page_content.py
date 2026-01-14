@@ -70,6 +70,34 @@ class NotionPageExtractor:
                 url = f"{self.base_url}/blocks/{page_id}/children?start_cursor={url}&page_size={page_size}"
         return blocks
 
+    def query_database(self, database_id: str) -> list[str]:
+        """Query a database to retrieve its pages (items).
+
+        Args:
+            database_id (str): The ID of the Notion database.
+
+        Returns:
+            list: List of page IDs.
+        """
+        results = []
+        url = f"{self.base_url}/databases/{database_id}/query"
+        has_more = True
+        start_cursor = None
+
+        while has_more:
+            payload = {}
+            if start_cursor:
+                payload["start_cursor"] = start_cursor
+
+            response = requests.post(url, headers=self.headers, json=payload, timeout=60)
+            response.raise_for_status()
+            data = response.json()
+            results.extend(data.get("results", []))
+            has_more = data.get("has_more", False)
+            start_cursor = data.get("next_cursor")
+
+        return [page["id"] for page in results]
+
     @staticmethod
     def extract_text_from_block(block: dict[str, Any]) -> str:
         """Extract and concatenate plain text from Notion blocks.

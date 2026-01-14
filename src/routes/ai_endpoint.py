@@ -8,8 +8,10 @@ from src.containers.containers import AppContainer
 from src.routes.routers import processor_router
 from src.service.ai_researcher.classifier import Classifier
 from src.service.arxiv.arxiv_fetcher import ArxivFetcher
+from src.service.notion_db.extract_page_content import NotionPageExtractor
 from src.service.processor import PapersProcessor
 from src.service.workflow import WorkflowService
+from src.settings import settings as api_settings
 from src.utils.schemas import ClassifyRequest, SummarizeRequest
 
 
@@ -18,21 +20,35 @@ from src.utils.schemas import ClassifyRequest, SummarizeRequest
 def summarize_paper(
     request: SummarizeRequest,
     workflow: WorkflowService = Depends(Provide[AppContainer.workflow]),  # noqa: B008
+    notion_settings_extractor: NotionPageExtractor = Depends(Provide[AppContainer.notion_settings_extractor]),  # noqa: B008
 ) -> str:
     """Summarize paper endpoint.
 
     Args:
         request (SummarizeRequest): Request model.
         workflow (WorkflowService): Workflow service.
+        notion_settings_extractor (NotionPageExtractor): Notion settings extractor.
 
     Returns:
         str: the URL of the created Notion page.
     """
-    # TODO: Ensure that the paper is not already summarized.
-    result = workflow.process_paper_summary_and_upload(
+    database_id = api_settings.notion_command_database_id
+    if request.category and request.summarizer_prompt is None:
+        for page_id in notion_settings_extractor.query_database(database_id):
+            settings = notion_settings_extractor.extract_settings_from_page(page_id)
+            if settings is None:
+                continue
+            if settings["Page Name"] == request.category:
+                request.summarizer_prompt = settings.get("Summarizer Prompt", None)
+                break
+
+    if request.summarizer_prompt is None:
+        raise HTTPException(status_code=404, detail="Failed to find summarizer prompt for category")
+
+    result = workflow.prepare_paper_summary_and_upload(
         paper_id=request.paper_id,
         summarizer_prompt=request.summarizer_prompt,
-        category=request.category,
+        category=request.category or "AdHoc Research",
     )
     if result is None:
         raise HTTPException(status_code=500, detail="Failed to summarize paper")
