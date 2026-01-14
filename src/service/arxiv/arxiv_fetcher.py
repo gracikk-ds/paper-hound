@@ -29,6 +29,7 @@ class ArxivFetcher:
     predefined_categories: tuple[str, str, str] = ("cs.CV", "cs.LG", "cs.AI")
     base_url: str = "http://export.arxiv.org/api/query?"
     atom_namespace = "{http://www.w3.org/2005/Atom}"
+    max_display_authors: int = 10
 
     def __init__(self, page_size: int = 50) -> None:
         """Initialize the ArxivFetcher with search parameters.
@@ -105,8 +106,8 @@ class ArxivFetcher:
         Returns:
             list[str]: The list of authors names.
         """
-        if len(authors) > 1:
-            return [authors[0], authors[-1]]
+        if len(authors) > self.max_display_authors:
+            return [*authors[: self.max_display_authors - 1], authors[-1]]
         return authors
 
     def _extract_entities(self, url: str) -> list[ET.Element]:
@@ -143,6 +144,7 @@ class ArxivFetcher:
         for entry in entities:
             # Extract metadata for each paper
             paper_id = safe_get_text(entry, f"{self.atom_namespace}id").split("/abs/")[-1]
+            paper_id = re.sub(r"v\d+", "", paper_id)  # remove v{number} from the paper id
             title = safe_get_text(entry, f"{self.atom_namespace}title").strip().replace("\n", " ")
             summary = safe_get_text(entry, f"{self.atom_namespace}summary").strip().replace("\n", " ")
             published = safe_get_text(entry, f"{self.atom_namespace}published")

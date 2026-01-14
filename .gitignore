@@ -7,7 +7,10 @@ __pycache__/
 
 # C extensions
 *.so
+TODO
 
+# Temporary storage
+tmp_storage/
 # Distribution / packaging
 .Python
 build/

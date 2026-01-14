@@ -51,7 +51,7 @@ class Summarizer:
             return None, None
 
         file_name = f"{paper.title.replace(' ', '_').lower()}_summary.md"
-        md_path = Path("tmp_mds") / file_name
+        md_path = Path("tmp_storage/tmp_mds") / file_name
         md_path.parent.mkdir(parents=True, exist_ok=True)
 
         with open(md_path, mode="w", encoding="utf-8") as file:

@@ -1,4 +1,13 @@
-"""Processor class for processing papers."""
+"""Processor module for managing paper operations within the system.
+
+This module provides the `PapersProcessor` class, which acts as a central coordinator for:
+- Fetching papers from arXiv day-by-day.
+- Generating embeddings for paper summaries using `EmbeddingService`.
+- Storing and retrieving papers in the `QdrantVectorStore`.
+- Searching for papers using semantic similarity and metadata filtering (e.g., date ranges).
+- Finding similar papers based on existing entries.
+- Managing paper lifecycle (insertion, deletion, counting).
+"""
 
 from datetime import date, datetime, timedelta
 

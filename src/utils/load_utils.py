@@ -37,8 +37,8 @@ def load_pdf_and_images(paper: Paper) -> tuple[Path | None, Path | None]:
         tuple[Path, Path]: the path to the PDF and the path to the images.
     """
     file_name = f"{paper.title.replace(' ', '_').lower()}.pdf"
-    tmp_pdf_path = Path("tmp_pdfs") / file_name
-    tmp_images_path = Path("tmp_images") / file_name
+    tmp_pdf_path = Path("tmp_storage/tmp_pdfs") / file_name
+    tmp_images_path = Path("tmp_storage/tmp_images") / file_name
     try:
         download_pdf(paper.pdf_url, tmp_pdf_path)
         extract_images(str(tmp_pdf_path), str(tmp_images_path))
