@@ -6,6 +6,7 @@ import re
 from typing import Any
 
 import requests
+from loguru import logger
 
 from src.service.notion_db.s3_loader import S3Uploader
 from src.service.notion_db.utils import resolve_image_path
@@ -175,7 +176,7 @@ class MarkdownToNotionUploader:
     def markdown_to_blocks(
         self,
         markdown: str,
-    ) -> tuple[list[dict[str, Any]], str, str, str]:
+    ) -> tuple[list[dict[str, Any]], str, str, str, list[str]]:
         """Convert basic Markdown text to Notion blocks. Support headings, paragraphs, bullet points.
 
         Args:
@@ -183,6 +184,10 @@ class MarkdownToNotionUploader:
 
         Returns:
             List[Dict[str, Any]]: List of Notion blocks.
+            str: ArXiv URL.
+            str: Published date.
+            str: Title.
+            list[str]: Authors.
         """
         lines = markdown.splitlines()
         blocks: list[dict[str, Any]] = []
@@ -191,6 +196,7 @@ class MarkdownToNotionUploader:
         title = ""
         arxiv_url = ""
         published_date = "2022-01-01"
+        authors = []
 
         for line in lines:
             line = line.rstrip()  # noqa: PLW2901
@@ -211,6 +217,14 @@ class MarkdownToNotionUploader:
 
             if line.startswith("**Published Date:**"):
                 published_date = line.split("**Published Date:**")[1].strip()
+                continue
+
+            if line.startswith("**Authors:**"):
+                try:
+                    authors = eval(line.split("**Authors:**")[1].strip())  # noqa: S307
+                except Exception as exp:  # noqa: BLE001
+                    logger.warning(f"Error parsing authors: {exp}")
+                    authors = []
                 continue
 
             # Parse images
@@ -244,7 +258,7 @@ class MarkdownToNotionUploader:
                         "paragraph": {"rich_text": self._parse_rich_text(line)},
                     },
                 )
-        return blocks, arxiv_url, published_date, title
+        return blocks, arxiv_url, published_date, title, authors
 
     def upload_markdown_file(self, file_path: str, category: str = "Image Editing") -> str:
         """Read the markdown file, convert to Notion blocks, and upload as a new page.
@@ -259,12 +273,13 @@ class MarkdownToNotionUploader:
         with open(file_path, encoding="utf-8") as file:
             markdown = file.read()
 
-        blocks, arxiv_url, published_date, title = self.markdown_to_blocks(markdown)
+        blocks, arxiv_url, published_date, title, authors = self.markdown_to_blocks(markdown)
         properties = {
             "Category": {"multi_select": [{"name": category}]},
             "Status": {"select": {"name": "Inbox"}},
             "Arxiv": {"url": arxiv_url},
             "Published": {"date": {"start": published_date}},
+            "Authors": {"multi_select": [{"name": authors}]},
         }
         data = {
             "parent": {"database_id": self.database_id},
