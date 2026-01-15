@@ -1,4 +1,8 @@
-"""Workflow service for managing paper processing tasks."""
+"""Workflow service for managing paper processing tasks.
+
+This module orchestrates the complete pipeline for processing ArXiv papers:
+ingestion, classification, summarization, and uploading to Notion.
+"""
 
 import asyncio
 import datetime

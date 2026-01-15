@@ -3,12 +3,43 @@
 import io
 import os
 import re
+import warnings
+from typing import TYPE_CHECKING
 
-import fitz
 from loguru import logger
 from PIL import Image
 
 MIN_IMAGE_SIZE: int = 10
+
+if TYPE_CHECKING:
+    import fitz as fitz_module
+
+
+def _get_fitz() -> "fitz_module":  # type: ignore
+    """Import PyMuPDF with warnings filtered.
+
+    Returns:
+        fitz_module: The imported PyMuPDF module.
+    """
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message="builtin type SwigPyPacked has no __module__ attribute",
+            category=DeprecationWarning,
+        )
+        warnings.filterwarnings(
+            "ignore",
+            message="builtin type SwigPyObject has no __module__ attribute",
+            category=DeprecationWarning,
+        )
+        warnings.filterwarnings(
+            "ignore",
+            message="builtin type swigvarlink has no __module__ attribute",
+            category=DeprecationWarning,
+        )
+        import fitz
+
+    return fitz
 
 
 def filter_images_by_size(blk: dict, img_index: int, page_index: int) -> bool:
@@ -72,6 +103,7 @@ def extract_images(pdf_path: str, output_folder: str = "images") -> None:
         pdf_path: Path to the input PDF file
         output_folder: Folder to save extracted images
     """
+    fitz = _get_fitz()
     doc = fitz.open(pdf_path)  # type: ignore
     os.makedirs(output_folder, exist_ok=True)
 

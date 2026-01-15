@@ -1,4 +1,16 @@
-"""Ai endpoints."""
+"""AI-powered endpoints for arXiv paper processing.
+
+This module provides FastAPI endpoints for summarizing and classifying arXiv papers
+using AI models. It integrates with Notion for publishing summaries and supports
+custom classification and summarization prompts.
+
+Endpoints:
+    POST /summarize-paper: Generate an AI-powered summary of an arXiv paper and publish it to Notion.
+    POST /classify-paper: Classify an arXiv paper based on a custom classification prompt.
+"""
+
+import re
+from urllib.parse import urlparse
 
 from dependency_injector.wiring import Provide, inject
 from fastapi import Depends, HTTPException
@@ -13,6 +25,42 @@ from src.service.processor import PapersProcessor
 from src.service.workflow import WorkflowService
 from src.settings import settings as api_settings
 from src.utils.schemas import ClassifyRequest, SummarizeRequest
+
+
+def _normalize_category(category: str | None) -> str:
+    """Normalize the category value.
+
+    Args:
+        category: Raw category from the request.
+
+    Returns:
+        Normalized category name, defaulting to "AdHoc Research".
+    """
+    if category is None:
+        return "AdHoc Research"
+    normalized = category.strip()
+    return normalized or "AdHoc Research"
+
+
+def _normalize_paper_id(paper_id: str) -> str:
+    """Normalize a paper identifier or arXiv URL.
+
+    Args:
+        paper_id: Raw paper ID or URL.
+
+    Returns:
+        Normalized paper ID string.
+    """
+    cleaned = paper_id.strip()
+    if cleaned.startswith(("http://", "https://")):
+        parsed = urlparse(cleaned)
+        if parsed.netloc.endswith(("arxiv.org", "alphaxiv.org")):
+            path = parsed.path.strip("/")
+            if path.startswith(("abs/", "pdf/")):
+                cleaned = path.split("/", 1)[1].replace(".pdf", "")
+
+    match = re.match(r"^(\d{4}\.\d{5})(?:v\d+)?$", cleaned)
+    return match.group(1) if match else cleaned
 
 
 @processor_router.post("/summarize-paper", response_model=str)
@@ -45,24 +93,36 @@ def summarize_paper(
         HTTPException: 404 if no summarizer prompt found for the specified category.
         HTTPException: 500 if summary generation or Notion upload fails.
     """
-    database_id = api_settings.notion_command_database_id
-    if request.category and request.summarizer_prompt is None:
-        for page_id in notion_settings_extractor.query_database(database_id):
-            settings = notion_settings_extractor.extract_settings_from_page(page_id)
-            if settings is None:
-                continue
-            if settings["Page Name"] == request.category:
-                request.summarizer_prompt = settings.get("Summarizer Prompt", None)
-                break
+    category = _normalize_category(request.category)
+    if request.summarizer_prompt is not None:
+        request.summarizer_prompt = request.summarizer_prompt.strip() or None
+
+    if request.summarizer_prompt is None:
+        database_id = api_settings.notion_command_database_id
+        try:
+            for page_id in notion_settings_extractor.query_database(database_id):
+                settings = notion_settings_extractor.extract_settings_from_page(page_id)
+                if settings is None:
+                    continue
+                if settings.get("Page Name", "").strip() == category:
+                    request.summarizer_prompt = settings.get("Summarizer Prompt", None)
+                    break
+        except Exception as exp:
+            logger.error(f"Error resolving summarizer prompt: {exp}")
+            raise HTTPException(status_code=500, detail="Failed to resolve summarizer prompt") from exp
 
     if request.summarizer_prompt is None:
         raise HTTPException(status_code=404, detail="Failed to find summarizer prompt for category")
 
-    result = workflow.prepare_paper_summary_and_upload(
-        paper_id=request.paper_id,
-        summarizer_prompt=request.summarizer_prompt,
-        category=request.category or "AdHoc Research",
-    )
+    try:
+        result = workflow.prepare_paper_summary_and_upload(
+            paper_id=request.paper_id,
+            summarizer_prompt=request.summarizer_prompt,
+            category=category,
+        )
+    except Exception as exp:
+        logger.error(f"Error generating summary for {request.paper_id}: {exp}")
+        raise HTTPException(status_code=500, detail="Failed to summarize paper") from exp
     if result is None:
         raise HTTPException(status_code=500, detail="Failed to summarize paper")
     return result
@@ -103,10 +163,11 @@ def classify_paper(
         about generative image editing?"), identifying methodology types, or topic
         screening for literature reviews.
     """
-    paper = processor.get_paper_by_id(request.paper_id)
+    normalized_paper_id = _normalize_paper_id(request.paper_id)
+    paper = processor.get_paper_by_id(normalized_paper_id)
     if paper is None:
         try:
-            paper = arxiv_fetcher.extract_paper_by_name_or_id(request.paper_id)
+            paper = arxiv_fetcher.extract_paper_by_name_or_id(normalized_paper_id)
         except Exception as exp:
             logger.error(f"Error fetching paper {request.paper_id}: {exp}")
             raise HTTPException(status_code=404, detail="Paper not found") from exp
@@ -115,8 +176,12 @@ def classify_paper(
         logger.error(f"Error extracting paper: {request.paper_id}")
         raise HTTPException(status_code=404, detail="Paper not found")
 
-    return classifier.classify(
-        title=paper.title,
-        summary=paper.summary,
-        system_prompt=request.classifier_system_prompt,
-    )
+    try:
+        return classifier.classify(
+            title=paper.title,
+            summary=paper.summary,
+            system_prompt=request.classifier_system_prompt,
+        )
+    except Exception as exp:
+        logger.error(f"Error classifying paper {request.paper_id}: {exp}")
+        raise HTTPException(status_code=500, detail="Failed to classify paper") from exp
