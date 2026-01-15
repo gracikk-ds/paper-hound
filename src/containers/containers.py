@@ -16,6 +16,7 @@ from src.service.notion_db.add_content_to_page import MarkdownToNotionUploader
 from src.service.notion_db.extract_page_content import NotionPageExtractor
 from src.service.processor import PapersProcessor
 from src.service.vector_db.embedder import EmbeddingService
+from src.service.vector_db.processing_cache import ProcessingCacheStore
 from src.service.vector_db.vector_storage import QdrantVectorStore
 from src.service.workflow import WorkflowService
 from src.settings import Settings
@@ -71,6 +72,11 @@ class AppContainer(containers.DeclarativeContainer):
         batch_size=config.embedding_service_batch_size,
     )
 
+    processing_cache: providers.Singleton[ProcessingCacheStore] = providers.Singleton(
+        ProcessingCacheStore,
+        collection=config.processing_cache_collection,
+    )
+
     processor: providers.Singleton[PapersProcessor] = providers.Singleton(
         PapersProcessor,
         vector_store=vector_store,
@@ -114,6 +120,7 @@ class AppContainer(containers.DeclarativeContainer):
         notion_uploader=notion_uploader,
         notion_settings_extractor=notion_settings_extractor,
         notion_command_database_id=config.notion_command_database_id,
+        processing_cache=processing_cache,
     )
 
     # Singleton and Callable provider for the Logger resource.

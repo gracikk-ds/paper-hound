@@ -3,7 +3,6 @@
 import itertools
 import uuid
 from collections.abc import Iterable
-from datetime import date, datetime
 
 from loguru import logger
 from qdrant_client import QdrantClient
@@ -86,8 +85,6 @@ class QdrantVectorStore:
                     collection_name=self.collection,
                     vectors_config=qmodels.VectorParams(size=self.vector_size, distance=self.distance),
                 )
-            else:
-                logger.info(f"Collection '{self.collection}' already exists.")
 
             # Ensure payload index for efficient sorting by date
             self.client.create_payload_index(
@@ -159,12 +156,58 @@ class QdrantVectorStore:
         logger.warning("Could not retrieve a valid start or end date from the collection.")
         return None, None
 
+    def get_points_embedding_model(self, ids: list[str]) -> dict[str, str | None]:
+        """Return stored embedding model for existing points.
+
+        Args:
+            ids (list[str]): Original (non-uuid) paper ids.
+
+        Returns:
+            dict[str, str | None]: Mapping paper_id -> embedding_model for points that exist.
+            If the point exists but has no embedding_model field, value is None.
+        """
+        self.ensure_collection()
+        if not ids:
+            return {}
+
+        uuid_ids = [str(uuid.uuid5(uuid.NAMESPACE_URL, id_val)) for id_val in ids]
+        uuid_to_paper_id = dict(zip(uuid_ids, ids, strict=True))
+
+        existing: dict[str, str | None] = {}
+        check_batch_size = 1000
+        for i in range(0, len(uuid_ids), check_batch_size):
+            chunk = uuid_ids[i : i + check_batch_size]
+            try:
+                results = self.client.retrieve(
+                    collection_name=self.collection,
+                    ids=chunk,
+                    with_payload=["embedding_model"],
+                    with_vectors=False,
+                )
+            except Exception as exp:
+                logger.error(f"Failed to retrieve embedding_model payloads: {exp}")
+                raise
+
+            for rec in results:
+                paper_id = uuid_to_paper_id.get(str(rec.id))
+                if paper_id is None:
+                    continue
+                embedding_model = None
+                if rec.payload:
+                    embedding_model = rec.payload.get("embedding_model")  # type: ignore[assignment]
+                existing[paper_id] = embedding_model
+
+        return existing
+
     def upsert(
         self,
         ids: Iterable[str],
         vectors: Iterable[list[float]],
         payloads: Iterable[Paper],
         batch_size: int = 256,
+        *,
+        skip_existing: bool = True,
+        embedding_model: str | None = None,
     ) -> None:
         """Upserts points into Qdrant in memory-efficient batches from iterators.
 
@@ -173,34 +216,41 @@ class QdrantVectorStore:
             vectors (Iterable[list[float]]): An iterator of vectors.
             payloads (Iterable[Paper]): An iterator of payloads.
             batch_size (int): The number of points to send in each batch.
+            skip_existing (bool): If True, avoids upserting points that already exist.
+            embedding_model (str | None): If provided, stored in payload as 'embedding_model'.
         """
         self.ensure_collection()
         uuid_ids = [str(uuid.uuid5(uuid.NAMESPACE_URL, id_val)) for id_val in ids]
 
-        existing_ids = set()
-        # Check for existing points to avoid re-upserting
-        check_batch_size = 1000
-        for i in range(0, len(uuid_ids), check_batch_size):
-            chunk = uuid_ids[i : i + check_batch_size]
-            try:
-                results = self.client.retrieve(
-                    collection_name=self.collection,
-                    ids=chunk,
-                    with_payload=False,
-                    with_vectors=False,
-                )
-                existing_ids.update(point.id for point in results)
-            except Exception as exp:
-                logger.error(f"Failed to check existing points: {exp}")
-                raise
+        existing_ids: set[str] = set()
+        if skip_existing:
+            # Check for existing points to avoid re-upserting
+            check_batch_size = 1000
+            for i in range(0, len(uuid_ids), check_batch_size):
+                chunk = uuid_ids[i : i + check_batch_size]
+                try:
+                    results = self.client.retrieve(
+                        collection_name=self.collection,
+                        ids=chunk,
+                        with_payload=False,
+                        with_vectors=False,
+                    )
+                    existing_ids.update(str(point.id) for point in results)
+                except Exception as exp:
+                    logger.error(f"Failed to check existing points: {exp}")
+                    raise
 
-        if existing_ids:
-            logger.info(f"Skipping {len(existing_ids)} existing points.")
+            if existing_ids:
+                logger.info(f"Skipping {len(existing_ids)} existing points.")
 
         points_iter = (
-            qmodels.PointStruct(id=uuid_id, vector=vec, payload=pay.model_dump())
+            qmodels.PointStruct(
+                id=uuid_id,
+                vector=vec,
+                payload=(pay.model_dump() | ({"embedding_model": embedding_model} if embedding_model else {})),
+            )
             for uuid_id, vec, pay in zip(uuid_ids, vectors, payloads, strict=True)
-            if uuid_id not in existing_ids
+            if (not skip_existing) or (uuid_id not in existing_ids)
         )
 
         batch_num = 0

@@ -11,6 +11,7 @@ This module provides the `PapersProcessor` class, which acts as a central coordi
 
 from datetime import date, datetime, timedelta
 
+from loguru import logger
 from qdrant_client import models as qmodels
 
 from src.service.arxiv.arxiv_fetcher import fetch_papers_day_by_day
@@ -48,18 +49,54 @@ class PapersProcessor:
         end_date_str = end_date.strftime("%Y-%m-%d")
 
         embedder_costs = 0.0
+        current_embedding_model = self.embedding_service.model_name
         for papers in fetch_papers_day_by_day(
             start_date_str,
             end_date_str,
             collection_start_date_str,
             collection_end_date_str,
         ):
-            # embed the summaries
             paper_ids = [paper.paper_id for paper in papers]
-            summary_list = [paper.summary for paper in papers]
+
+            # Pre-check Qdrant: if the point exists and embedding_model matches, skip embedding.
+            existing_models_by_id = self.vector_store.get_points_embedding_model(paper_ids)
+
+            papers_to_embed: list[Paper] = [
+                paper for paper in papers if existing_models_by_id.get(paper.paper_id) != current_embedding_model
+            ]
+
+            if not papers_to_embed:
+                logger.info(
+                    f"Embedding skipped for day batch: fetched={len(papers)}, skipped_same_model={len(papers)}",
+                )
+                continue
+
+            new_count = sum(1 for p in papers_to_embed if p.paper_id not in existing_models_by_id)
+            reembed_count = len(papers_to_embed) - new_count
+            skipped_count = len(papers) - len(papers_to_embed)
+            logger.info(
+                "Embedding precheck stats "
+                f"[model={current_embedding_model}]: fetched={len(papers)}, "
+                f"to_embed={len(papers_to_embed)}, skipped_same_model={skipped_count}, "
+                f"new={new_count}, reembed_model_change={reembed_count}",
+            )
+
+            # Embed only the needed subset.
+            ids_to_embed = [paper.paper_id for paper in papers_to_embed]
+            summary_list = [paper.summary for paper in papers_to_embed]
+
+            before_total = self.embedding_service.total_inference_price
             summary_embeddings = self.embedding_service.embed_batch(summary_list)
-            embedder_costs += self.embedding_service.inference_price
-            self.vector_store.upsert(paper_ids, summary_embeddings, papers)
+            embedder_costs += self.embedding_service.total_inference_price - before_total
+
+            # Overwrite existing points when model changed; insert new ones otherwise.
+            self.vector_store.upsert(
+                ids_to_embed,
+                summary_embeddings,
+                papers_to_embed,
+                skip_existing=False,
+                embedding_model=current_embedding_model,
+            )
         return embedder_costs
 
     def search_papers(

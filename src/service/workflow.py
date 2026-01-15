@@ -13,6 +13,7 @@ from src.service.arxiv.arxiv_fetcher import ArxivFetcher
 from src.service.notion_db.add_content_to_page import MarkdownToNotionUploader
 from src.service.notion_db.extract_page_content import NotionPageExtractor
 from src.service.processor import PapersProcessor
+from src.service.vector_db.processing_cache import ProcessingCacheStore, make_cache_key, stable_hash
 from src.utils.images_utils import add_images_to_md
 from src.utils.load_utils import load_pdf_and_images
 
@@ -31,6 +32,7 @@ class WorkflowService:
         notion_uploader: MarkdownToNotionUploader,
         notion_settings_extractor: NotionPageExtractor,
         notion_command_database_id: str,
+        processing_cache: ProcessingCacheStore,
         threshold: float = 0.65,
     ) -> None:
         """Initialize the WorkflowService.
@@ -43,6 +45,7 @@ class WorkflowService:
             notion_uploader (MarkdownToNotionUploader): Service for uploading to Notion.
             notion_settings_extractor (NotionPageExtractor): Service for extracting settings from Notion pages.
             notion_command_database_id (str): The ID of the Notion command database.
+            processing_cache (ProcessingCacheStore): Persistent cache for classifier/summarizer outcomes.
             threshold (float): The threshold for the similarity score.
         """
         self.threshold = threshold
@@ -53,6 +56,7 @@ class WorkflowService:
         self.notion_uploader = notion_uploader
         self.notion_settings_extractor = notion_settings_extractor
         self.notion_command_database_id = notion_command_database_id
+        self.processing_cache = processing_cache
 
     def _ingest_papers(self, start_date: datetime.date, end_date: datetime.date) -> float:
         """Ingest papers for a given date range.
@@ -75,7 +79,7 @@ class WorkflowService:
         else:
             return costs
 
-    def prepare_paper_summary_and_upload(  # noqa: PLR0912,PLR0911
+    def prepare_paper_summary_and_upload(
         self,
         paper_id: str,
         summarizer_prompt: str | None = None,
@@ -91,6 +95,9 @@ class WorkflowService:
         Returns:
             str | None: The URL of the created Notion page, or None if failed.
         """
+        # Reset per-call cost; otherwise callers may accidentally attribute a previous request's cost.
+        self.summarizer.inference_price = 0.0
+
         # Extract paper information
         paper = self.processor.get_paper_by_id(paper_id)
         if paper is None:
@@ -103,12 +110,6 @@ class WorkflowService:
         if paper is None:
             logger.error(f"Paper {paper_id} not found.")
             return None
-
-        # Check if paper already exists in Notion
-        url = self.notion_uploader.check_paper_exists(paper.paper_id)
-        if url:
-            logger.info(f"Paper {paper.title} already exists in Notion: {url}. Skipping.")
-            return url
 
         tmp_pdf_path, tmp_images_path = load_pdf_and_images(paper)
         if tmp_pdf_path is None or tmp_images_path is None:
@@ -142,7 +143,7 @@ class WorkflowService:
             if "md_path" in locals() and md_path.exists():
                 md_path.unlink()
 
-    def _process_category(  # noqa: PLR0913
+    def _process_category(  # noqa: PLR0912,PLR0913,PLR0915
         self,
         category: str,
         settings: dict,
@@ -150,6 +151,7 @@ class WorkflowService:
         date_end_str: str,
         top_k: int = 10,
         *,
+        category_key: str | None = None,
         use_classifier: bool = True,
     ) -> tuple[float, float, int]:
         """Process a specific category.
@@ -160,6 +162,7 @@ class WorkflowService:
             date_start_str (str): Start date string.
             date_end_str (str): End date string.
             top_k (int): Number of candidates.
+            category_key (str | None): Stable category identifier for cache keys (e.g. Notion settings page id).
             use_classifier (bool): Whether to use classifier.
 
         Returns:
@@ -178,21 +181,79 @@ class WorkflowService:
             logger.error(f"Error searching papers for category {category}: {exp}")
             return 0.0, 0.0, 0
 
-        logger.info(f"Found {len(candidates)} candidates for '{query}' in {category}")
+        logger.info(f"Found {len(candidates)} candidates for '{query}' query in {category} category.")
         processed_count = 0
         cls_costs = 0.0
         sum_costs = 0.0
+
+        category_key = category_key or category
+        classifier_prompt = settings.get("Classifier Prompt", "") or ""
+        summarizer_prompt = settings.get("Summarizer Prompt") or ""
+        classifier_prompt_hash = stable_hash(classifier_prompt)
+        summarizer_prompt_hash = stable_hash(summarizer_prompt)
+        classifier_model_name = getattr(self.classifier.llm_client, "model_name", "unknown")
+        summarizer_model_name = getattr(self.summarizer.llm_client, "model_name", "unknown")
+
+        cached_classifier_hits = 0
+        cached_summarizer_hits = 0
+        classifier_calls = 0
+        summarizer_calls = 0
+
+        classifier_keys: list[str] = []
+        summarizer_keys: list[str] = []
+        for paper in candidates:
+            classifier_keys.append(
+                make_cache_key(
+                    paper_id=paper.paper_id,
+                    category_key=category_key,
+                    stage="classifier",
+                    model_name=classifier_model_name,
+                    prompt_hash=classifier_prompt_hash,
+                ),
+            )
+            summarizer_keys.append(
+                make_cache_key(
+                    paper_id=paper.paper_id,
+                    category_key=category_key,
+                    stage="summarizer",
+                    model_name=summarizer_model_name,
+                    prompt_hash=summarizer_prompt_hash,
+                ),
+            )
+
+        classifier_cache = self.processing_cache.get_classifier_results(classifier_keys) if use_classifier else {}
+        summarizer_cache = self.processing_cache.get_summarizer_results(summarizer_keys)
 
         for paper in candidates:
             try:
                 is_relevant = True
                 if use_classifier:
-                    is_relevant = self.classifier.classify(
-                        title=paper.title,
-                        summary=paper.summary,
-                        system_prompt=settings["Classifier Prompt"],
+                    cls_key = make_cache_key(
+                        paper_id=paper.paper_id,
+                        category_key=category_key,
+                        stage="classifier",
+                        model_name=classifier_model_name,
+                        prompt_hash=classifier_prompt_hash,
                     )
-                    cls_costs += self.classifier.inference_price
+                    if cls_key in classifier_cache:
+                        cached_classifier_hits += 1
+                        is_relevant = classifier_cache[cls_key]
+                    else:
+                        is_relevant = self.classifier.classify(
+                            title=paper.title,
+                            summary=paper.summary,
+                            system_prompt=classifier_prompt,
+                        )
+                        classifier_calls += 1
+                        cls_costs += self.classifier.inference_price
+                        self.processing_cache.put_classifier_result(
+                            cache_key=cls_key,
+                            paper_id=paper.paper_id,
+                            category_key=category_key,
+                            model_name=classifier_model_name,
+                            prompt_hash=classifier_prompt_hash,
+                            is_relevant=is_relevant,
+                        )
 
                 if is_relevant:
                     if use_classifier:
@@ -200,12 +261,56 @@ class WorkflowService:
                     else:
                         logger.info(f"Processing '{paper.title}' (classifier skipped)...")
 
-                    url = self.prepare_paper_summary_and_upload(
+                    sum_key = make_cache_key(
                         paper_id=paper.paper_id,
-                        summarizer_prompt=settings["Summarizer Prompt"],
-                        category=category,
+                        category_key=category_key,
+                        stage="summarizer",
+                        model_name=summarizer_model_name,
+                        prompt_hash=summarizer_prompt_hash,
                     )
-                    sum_costs += self.summarizer.inference_price
+
+                    cached_sum = summarizer_cache.get(sum_key)
+                    summarizer_cache_hit = (
+                        cached_sum is not None and cached_sum.status == "success" and cached_sum.notion_page_url
+                    )
+                    if summarizer_cache_hit:
+                        cached_summarizer_hits += 1
+                        url = cached_sum.notion_page_url
+                        self.summarizer.inference_price = 0.0
+                    else:
+                        url = self.prepare_paper_summary_and_upload(
+                            paper_id=paper.paper_id,
+                            summarizer_prompt=summarizer_prompt,
+                            category=category,
+                        )
+                        if self.summarizer.inference_price > 0:
+                            summarizer_calls += 1
+                        sum_costs += self.summarizer.inference_price
+
+                    # Record summarizer stage outcome in cache (even if Notion already had the paper),
+                    # but avoid unnecessary Qdrant writes on a pure cache hit.
+                    if not summarizer_cache_hit:
+                        if url:
+                            self.processing_cache.put_summarizer_result(
+                                cache_key=sum_key,
+                                paper_id=paper.paper_id,
+                                category_key=category_key,
+                                model_name=summarizer_model_name,
+                                prompt_hash=summarizer_prompt_hash,
+                                status="success",
+                                notion_page_url=url,
+                            )
+                        else:
+                            self.processing_cache.put_summarizer_result(
+                                cache_key=sum_key,
+                                paper_id=paper.paper_id,
+                                category_key=category_key,
+                                model_name=summarizer_model_name,
+                                prompt_hash=summarizer_prompt_hash,
+                                status="failed",
+                                notion_page_url=None,
+                            )
+
                     if url:
                         logger.info(f"Successfully processed '{paper.title}': {url}")
                         processed_count += 1
@@ -214,6 +319,12 @@ class WorkflowService:
             except Exception as exp:  # noqa: BLE001
                 logger.error(f"Error processing candidate '{paper.title}': {exp}")
 
+        logger.info(
+            "Category stats "
+            f"[{category}]: classifier_cache_hits={cached_classifier_hits}, "
+            f"summarizer_cache_hits={cached_summarizer_hits}, "
+            f"classifier_calls={classifier_calls}, summarizer_calls={summarizer_calls}",
+        )
         return cls_costs, sum_costs, processed_count
 
     def run_workflow(  # noqa: PLR0913
@@ -253,6 +364,9 @@ class WorkflowService:
                 logger.error(f"Invalid set of settings for {page_id}.")
                 continue
             page_category = page_settings.get("Page Name", None)
+            if page_category is None:
+                logger.error(f"Missing 'Page Name' in settings for {page_id}. Skipping.")
+                continue
             if category is not None and page_category is not None and page_category != category:
                 continue
 
@@ -262,6 +376,7 @@ class WorkflowService:
                 date_start_str=date_start_str,
                 date_end_str=date_end_str,
                 top_k=top_k,
+                category_key=page_id,
                 use_classifier=use_classifier,
             )
             total_cls_costs += cls_costs
