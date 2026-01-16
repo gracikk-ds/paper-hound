@@ -16,15 +16,16 @@ def format_paper_short(paper: Paper, index: int | None = None) -> str:
     Returns:
         Formatted paper string with title, authors, and date.
     """
-    prefix = f"{index}. " if index is not None else ""
+    prefix = f"{index}\\. " if index is not None else ""
     authors = ", ".join(paper.authors[:MAX_AUTHORS_TO_DISPLAY])
     if len(paper.authors) > MAX_AUTHORS_TO_DISPLAY:
         authors += " et al."
 
+    published_date = _escape_markdown(paper.published_date[:10])
     return (
         f"{prefix}*{_escape_markdown(paper.title)}*\n"
         f"_{_escape_markdown(authors)}_\n"
-        f"Published: {paper.published_date[:10]} | Category: `{paper.primary_category}`"
+        f"Published: {published_date} \\| Category: `{paper.primary_category}`"
     )
 
 
@@ -46,11 +47,13 @@ def format_paper_detailed(paper: Paper) -> str:
     if len(abstract) > MAX_ABSTRACT_LENGTH:
         abstract = abstract[:MAX_ABSTRACT_LENGTH] + "..."
 
+    published_date = _escape_markdown(paper.published_date[:10])
+    updated_date = _escape_markdown(paper.updated_date[:10])
     return (
         f"*{_escape_markdown(paper.title)}*\n\n"
         f"*Authors:* {_escape_markdown(authors)}\n"
-        f"*Published:* {paper.published_date[:10]}\n"
-        f"*Updated:* {paper.updated_date[:10]}\n"
+        f"*Published:* {published_date}\n"
+        f"*Updated:* {updated_date}\n"
         f"*Category:* `{paper.primary_category}`\n"
         f"*arXiv ID:* `{paper.paper_id}`\n\n"
         f"*Abstract:*\n{_escape_markdown(abstract)}"
@@ -70,7 +73,7 @@ def format_search_results(papers: list[Paper], query: str) -> str:
     if not papers:
         return f"No papers found for query: _{_escape_markdown(query)}_"
 
-    header = f"Found {len(papers)} paper(s) for: _{_escape_markdown(query)}_\n\n"
+    header = f"Found {len(papers)} paper\\(s\\) for: _{_escape_markdown(query)}_\n\n"
     paper_lines = [format_paper_short(p, i + 1) for i, p in enumerate(papers)]
     return header + "\n\n".join(paper_lines)
 
@@ -123,7 +126,7 @@ def format_subscription_notification(
     for i, (paper, notion_url) in enumerate(papers, 1):
         line = f"{i}\\. *{_escape_markdown(paper.title)}*"
         if notion_url:
-            line += f"\n   [View Summary on Notion]({notion_url})"
+            line += f"\n   [View Summary on Notion]({_escape_url(notion_url)})"
         lines.append(line)
     return header + "\n\n".join(lines)
 
@@ -143,3 +146,16 @@ def _escape_markdown(text: str) -> str:
     for char in special_chars:
         text = text.replace(char, f"\\{char}")
     return text
+
+
+def _escape_url(url: str) -> str:
+    """Escape special characters in URLs for Telegram MarkdownV2 links.
+
+    Args:
+        url: URL to escape.
+
+    Returns:
+        Escaped URL safe for MarkdownV2 link syntax.
+    """
+    url = url.replace("\\", "\\\\")
+    return url.replace(")", "\\)")

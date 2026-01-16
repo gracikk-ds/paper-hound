@@ -1,13 +1,16 @@
 """Telegram bot initialization and main entry point."""
 
 import asyncio
-from typing import ClassVar
+from typing import TYPE_CHECKING
 
 from loguru import logger
 from telegram import Update
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes
 
-from src.containers.containers import AppContainer
+from telegram_bot.context import bot_context
+
+if TYPE_CHECKING:
+    from src.containers.containers import AppContainer
 from telegram_bot.handlers import (
     handle_callback_query,
     handle_help,
@@ -23,16 +26,6 @@ from telegram_bot.handlers import (
     handle_topics,
     handle_unsubscribe,
 )
-
-
-class BotContext:
-    """Context holder for bot dependencies."""
-
-    container: AppContainer | None = None
-    admin_user_ids: ClassVar[set[int]] = set()
-
-
-bot_context = BotContext()
 
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -51,7 +44,7 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
 
 def create_bot_application(
     token: str,
-    container: AppContainer,
+    container: "AppContainer",
     admin_user_ids: set[int] | None = None,
 ) -> Application:
     """Create and configure the Telegram bot application.

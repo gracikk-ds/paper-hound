@@ -13,9 +13,10 @@ from telegram.ext import ContextTypes
 
 from src.service.notion_db.extract_page_content import NotionPageExtractor
 from src.settings import settings as api_settings
-from telegram_bot.bot import bot_context
+from telegram_bot.context import bot_context
 from telegram_bot.formatters import (
     _escape_markdown,
+    _escape_url,
     format_paper_detailed,
     format_search_results,
     format_similar_results,
@@ -244,30 +245,30 @@ HELP_TEXT = """
 *ArXiv Paper Hound Bot*
 
 *Discovery Commands:*
-/search <query> \\[options\\] \\- Semantic search for papers
-/paper <paper\\_id> \\- Get paper details by arXiv ID
-/similar <paper\\_id> \\[options\\] \\- Find similar papers
-/summarize <paper\\_id> \\[cat:Category\\] \\- Generate AI summary
-
+/search \\<query\\> \\[options\\] \\- Semantic search for papers
+/similar \\<paper\\_id\\> \\[options\\] \\- Find similar papers
 *Search/Similar Options:*
 • `k:N` \\- Number of results \\(default: 5\\)
 • `t:N` \\- Similarity threshold 0\\-1 \\(default: 0\\.65\\)
 • `from:DATE` \\- Start date \\(YYYY\\-MM\\-DD\\)
 • `to:DATE` \\- End date \\(YYYY\\-MM\\-DD\\)
 
+/paper \\<paper\\_id\\> \\- Get paper details by arXiv ID
+
+/summarize \\<paper\\_id\\> \\[cat:Category\\] \\- Generate AI summary
+Accepts arXiv URLs or plain IDs
 *Summarize Options:*
 • `cat:Name` \\- Research category \\(default: AdHoc Research\\)
-• Accepts arXiv URLs or plain IDs
 
 *Subscription Commands:*
 /topics \\- Show all available topics
 /subscribe \\- Subscribe to a topic \\(shows unsubscribed topics\\)
-/unsubscribe <id> \\- Remove a subscription
+/unsubscribe \\<id\\> \\- Remove a subscription
 /subscriptions \\- List your active subscriptions
 
 *Other Commands:*
 /stats \\- Database statistics
-/insert <start\\_date> <end\\_date> \\- Insert papers \\(admin only\\)
+/insert \\<start\\_date\\> \\<end\\_date\\> \\- Insert papers \\(admin only\\)
 /help \\- Show this message
 
 *Examples:*
@@ -287,7 +288,7 @@ I help you discover, save, and summarize research papers from arXiv\\.
 *Quick Start:*
 • Search papers: `/search <your query>`
 • Get paper details: `/paper <arxiv_id>`
-• Subscribe to topics: `/subscribe`
+• Summarize paper using Gemini Model: `/summarize <arxiv_id>`
 
 Type /help for all available commands\\.
 """
@@ -345,7 +346,7 @@ async def handle_search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         return
 
     escaped_query = _escape_markdown(params.query)
-    await update.message.reply_text(f"Searching for: _{escaped_query}_...", parse_mode=ParseMode.MARKDOWN_V2)
+    await update.message.reply_text(f"Searching for: _{escaped_query}_\\.\\.\\.", parse_mode=ParseMode.MARKDOWN_V2)
 
     try:
         processor = bot_context.container.processor()
@@ -388,7 +389,7 @@ async def handle_paper(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         return
 
     paper_id = context.args[0].strip()
-    await update.message.reply_text(f"Fetching paper `{paper_id}`...", parse_mode=ParseMode.MARKDOWN_V2)
+    await update.message.reply_text(f"Fetching paper `{paper_id}`\\.\\.\\.", parse_mode=ParseMode.MARKDOWN_V2)
 
     try:
         processor = bot_context.container.processor()
@@ -445,7 +446,10 @@ async def handle_similar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     params = parse_search_params(context.args[1:]) if len(context.args) > 1 else SearchParams(query="")
 
     escaped_id = _escape_markdown(paper_id)
-    await update.message.reply_text(f"Finding papers similar to `{escaped_id}`...", parse_mode=ParseMode.MARKDOWN_V2)
+    await update.message.reply_text(
+        f"Finding papers similar to `{escaped_id}`\\.\\.\\.",
+        parse_mode=ParseMode.MARKDOWN_V2,
+    )
 
     try:
         processor = bot_context.container.processor()
@@ -537,7 +541,7 @@ async def handle_summarize(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
         if notion_url:
             await status_msg.edit_text(
-                f"Summary created\\!\n\n[View on Notion]({_escape_markdown(notion_url)})",
+                f"Summary created\\!\n\n[View on Notion]({_escape_url(notion_url)})",
                 parse_mode=ParseMode.MARKDOWN_V2,
             )
         else:
@@ -857,7 +861,7 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
 
             if notion_url:
                 await query.message.reply_text(
-                    f"Summary created\\!\n\n[View on Notion]({_escape_markdown(notion_url)})",
+                    f"Summary created\\!\n\n[View on Notion]({_escape_url(notion_url)})",
                     parse_mode=ParseMode.MARKDOWN_V2,
                 )
             else:
