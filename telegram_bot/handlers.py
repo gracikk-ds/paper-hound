@@ -96,10 +96,7 @@ async def handle_search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     try:
         processor = bot_context.container.processor()
         loop = asyncio.get_running_loop()
-        papers = await loop.run_in_executor(
-            None,
-            lambda: processor.search_papers(query=query, k=5, threshold=0.5),
-        )
+        papers = await loop.run_in_executor(None, lambda: processor.search_papers(query=query, k=5, threshold=0.65))
 
         if not papers:
             await update.message.reply_text(f"No papers found for: {query}")
@@ -110,11 +107,7 @@ async def handle_search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
         message = format_search_results(papers, query)
         keyboard = build_paper_list_keyboard(papers)
-        await update.message.reply_text(
-            message,
-            parse_mode=ParseMode.MARKDOWN_V2,
-            reply_markup=keyboard,
-        )
+        await update.message.reply_text(message, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=keyboard)
     except Exception as exp:
         logger.error(f"Error in search: {exp}")
         await update.message.reply_text("An error occurred while searching. Please try again.")
@@ -153,11 +146,7 @@ async def handle_paper(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
         message = format_paper_detailed(paper)
         keyboard = build_paper_actions_keyboard(paper)
-        await update.message.reply_text(
-            message,
-            parse_mode=ParseMode.MARKDOWN_V2,
-            reply_markup=keyboard,
-        )
+        await update.message.reply_text(message, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=keyboard)
     except Exception as exp:
         logger.error(f"Error fetching paper: {exp}")
         await update.message.reply_text("An error occurred while fetching the paper. Please try again.")
@@ -182,7 +171,7 @@ async def handle_similar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         loop = asyncio.get_running_loop()
         papers = await loop.run_in_executor(
             None,
-            lambda: processor.find_similar_papers(paper_id=paper_id, k=5, threshold=0.5),
+            lambda: processor.find_similar_papers(paper_id=paper_id, k=5, threshold=0.65),
         )
 
         if not papers:
@@ -193,11 +182,7 @@ async def handle_similar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
         message = format_similar_results(papers, paper_id)
         keyboard = build_paper_list_keyboard(papers)
-        await update.message.reply_text(
-            message,
-            parse_mode=ParseMode.MARKDOWN_V2,
-            reply_markup=keyboard,
-        )
+        await update.message.reply_text(message, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=keyboard)
     except Exception as exp:
         logger.error(f"Error finding similar papers: {exp}")
         await update.message.reply_text("An error occurred. Please try again.")
