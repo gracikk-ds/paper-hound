@@ -69,6 +69,7 @@ task-tags = ["TODO", "FIXME", "XXX", "HACK"]
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]   # ignore unused imports in __init__.py files
 "test_*.py" = ["ANN"]      # Ignore missing type annotations in tests
+"telegram_bot/handlers.py" = ["ARG001", "BLE001"]      # Ignore missing type annotations in subscriptions.py
 
 [tool.ruff.lint.flake8-annotations]
 allow-star-arg-any = true  # suppress ANN401 for *args and **kwargs
