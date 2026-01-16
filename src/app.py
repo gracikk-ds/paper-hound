@@ -1,11 +1,13 @@
 """App entrypoints."""
 
 import asyncio
+import contextlib
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI
+from loguru import logger
 from starlette.middleware import Middleware
 from starlette_context.middleware import ContextMiddleware
 from starlette_context.plugins.correlation_id import CorrelationIdPlugin
@@ -17,26 +19,88 @@ from src.middleware.metrics import PrometheusMiddleware
 from src.middleware.process_time import ProcessTimeMiddleware
 from src.routes import ai_endpoint, health_endpoints, processor_endpoints, workflow_endpoints  # noqa: F401
 from src.routes.routers import processor_router, status_check_bp, workflow_router
+from src.service.processor import PapersProcessor
+from src.service.vector_db.processing_cache import ProcessingCacheStore
+from src.service.workflow import WorkflowService
 from src.settings import settings
+from telegram_bot.bot import create_bot_application, run_bot, stop_bot
+from telegram_bot.notifications import run_subscription_notifications
+
+
+async def run_scheduled_workflow_with_notifications(
+    workflow_service: WorkflowService,
+    bot_token: str,
+    processor: PapersProcessor,
+    processing_cache: ProcessingCacheStore,
+) -> None:
+    """Run the scheduled workflow and then send notifications.
+
+    Args:
+        workflow_service: The workflow service instance.
+        bot_token: Telegram bot token.
+        processor: Papers processor.
+        processing_cache: Processing cache.
+    """
+    # Run the workflow first
+    await workflow_service.run_scheduled_job()
+
+    # Then send notifications to subscribers
+    try:
+        notifications_sent = await run_subscription_notifications(
+            bot_token=bot_token,
+            processor=processor,
+            processing_cache=processing_cache,
+            look_back_days=workflow_service.look_back_days,
+        )
+        logger.info(f"Sent {notifications_sent} subscription notifications after workflow.")
+    except Exception:  # noqa: BLE001
+        logger.exception("Error sending subscription notifications")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Lifespan context manager for the application."""
+    container = app.container  # type: ignore
+
+    # Initialize Telegram bot
+    bot_application = None
+    bot_task = None
+    if settings.telegram_token:
+        admin_ids = {settings.telegram_chat_id} if settings.telegram_chat_id else set()
+        bot_application = create_bot_application(
+            token=settings.telegram_token,
+            container=container,
+            admin_user_ids=admin_ids,
+        )
+        bot_task = asyncio.create_task(run_bot(bot_application))
+        logger.info("Telegram bot started.")
+
     # Start the scheduler
     scheduler = AsyncIOScheduler()
-    workflow_service = app.container.workflow()  # type: ignore
+    workflow_service = container.workflow()
+    processor = container.processor()
+    processing_cache = container.processing_cache()
 
-    # Schedule the daily job at 08:00
-    scheduler.add_job(workflow_service.run_scheduled_job, "cron", hour=6, minute=0)
+    # Schedule the daily job at 06:00 with notifications
+    scheduler.add_job(
+        run_scheduled_workflow_with_notifications,
+        "cron",
+        hour=6,
+        minute=0,
+        args=[workflow_service, settings.telegram_token, processor, processing_cache],
+    )
     scheduler.start()
-
-    # Run the job immediately on startup to debug the workflow
-    # app.state.startup_job = asyncio.create_task(workflow_service.run_scheduled_job())
 
     yield
 
+    # Cleanup
     scheduler.shutdown()
+    if bot_application and bot_task:
+        bot_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await bot_task
+        await stop_bot(bot_application)
+        logger.info("Telegram bot stopped.")
 
 
 def create_app() -> FastAPI:
