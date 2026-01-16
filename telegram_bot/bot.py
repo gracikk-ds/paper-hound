@@ -20,6 +20,7 @@ from telegram_bot.handlers import (
     handle_subscribe,
     handle_subscriptions,
     handle_summarize,
+    handle_topics,
     handle_unsubscribe,
 )
 
@@ -78,6 +79,7 @@ def create_bot_application(
     application.add_handler(CommandHandler("similar", handle_similar))
     application.add_handler(CommandHandler("summarize", handle_summarize))
     application.add_handler(CommandHandler("insert", handle_insert))
+    application.add_handler(CommandHandler("topics", handle_topics))
     application.add_handler(CommandHandler("subscribe", handle_subscribe))
     application.add_handler(CommandHandler("unsubscribe", handle_unsubscribe))
     application.add_handler(CommandHandler("subscriptions", handle_subscriptions))

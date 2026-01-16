@@ -79,3 +79,16 @@ def build_subscription_keyboard(subscription_id: int) -> InlineKeyboardMarkup:
             [InlineKeyboardButton("Unsubscribe", callback_data=f"unsub:{subscription_id}")],
         ],
     )
+
+
+def build_topic_selection_keyboard(topics: list[str]) -> InlineKeyboardMarkup:
+    """Build inline keyboard for topic subscription selection.
+
+    Args:
+        topics: List of available topic names.
+
+    Returns:
+        InlineKeyboardMarkup with topic buttons (one per row).
+    """
+    buttons = [[InlineKeyboardButton(topic, callback_data=f"sub:{topic}")] for topic in topics]
+    return InlineKeyboardMarkup(buttons)

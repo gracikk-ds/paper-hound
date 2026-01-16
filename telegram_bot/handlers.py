@@ -21,7 +21,11 @@ from telegram_bot.formatters import (
     format_similar_results,
     format_stats,
 )
-from telegram_bot.keyboards import build_paper_actions_keyboard, build_paper_list_keyboard
+from telegram_bot.keyboards import (
+    build_paper_actions_keyboard,
+    build_paper_list_keyboard,
+    build_topic_selection_keyboard,
+)
 from telegram_bot.subscriptions import get_subscription_store
 
 # Default search parameters
@@ -204,6 +208,38 @@ def _resolve_summarizer_prompt(notion_extractor: NotionPageExtractor, category: 
     return None
 
 
+def _get_available_topics(notion_extractor: NotionPageExtractor) -> list[str]:
+    """Get list of available subscription topics from Notion database.
+
+    Args:
+        notion_extractor: The Notion page extractor instance.
+
+    Returns:
+        List of topic names (excluding AdHoc Research).
+    """
+    database_id = api_settings.notion_command_database_id
+    if not database_id:
+        return []
+
+    topics = []
+    try:
+        for page_id in notion_extractor.query_database(database_id):
+            page_settings = notion_extractor.extract_settings_from_page(page_id)
+            if page_settings is None:
+                continue
+            page_name = page_settings.get("Page Name", None)
+            if page_name is None:
+                continue
+            # Skip AdHoc Research - it's not a subscribable topic
+            if page_name == "AdHoc Research":
+                continue
+            topics.append(page_name)
+    except Exception:
+        logger.exception("Error fetching available topics")
+
+    return topics
+
+
 HELP_TEXT = """
 *ArXiv Paper Hound Bot*
 
@@ -224,7 +260,8 @@ HELP_TEXT = """
 • Accepts arXiv URLs or plain IDs
 
 *Subscription Commands:*
-/subscribe <topic> \\- Subscribe to a topic for daily updates
+/topics \\- Show all available topics
+/subscribe \\- Subscribe to a topic \\(shows unsubscribed topics\\)
 /unsubscribe <id> \\- Remove a subscription
 /subscriptions \\- List your active subscriptions
 
@@ -240,7 +277,6 @@ HELP_TEXT = """
 `/paper 2301.07041`
 `/summarize 2301.07041 cat:Image Editing`
 `/summarize https://arxiv.org/abs/2301.07041`
-`/subscribe diffusion models`
 """
 
 WELCOME_TEXT = """
@@ -251,7 +287,7 @@ I help you discover, save, and summarize research papers from arXiv\\.
 *Quick Start:*
 • Search papers: `/search <your query>`
 • Get paper details: `/paper <arxiv_id>`
-• Subscribe to topics: `/subscribe <topic>`
+• Subscribe to topics: `/subscribe`
 
 Type /help for all available commands\\.
 """
@@ -556,30 +592,116 @@ async def handle_insert(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         await status_msg.edit_text("An error occurred while inserting papers. Please try again.")
 
 
-async def handle_subscribe(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle the /subscribe command.
+async def handle_topics(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle the /topics command.
+
+    Shows all available topics from Notion database.
 
     Args:
         update: The update object.
         context: The callback context.
     """
-    if not context.args:
-        await update.message.reply_text(
-            "Usage: /subscribe <topic>\nExample: /subscribe diffusion models",
+    try:
+        notion_extractor = bot_context.container.notion_settings_extractor()
+        loop = asyncio.get_running_loop()
+        available_topics = await loop.run_in_executor(
+            None,
+            lambda: _get_available_topics(notion_extractor),
         )
+    except Exception as exp:
+        logger.error(f"Error fetching available topics: {exp}")
+        await update.message.reply_text("An error occurred while fetching available topics.")
         return
 
-    query = " ".join(context.args)
+    if not available_topics:
+        await update.message.reply_text("No topics available at the moment.")
+        return
+
+    lines = ["*Available Topics:*\n"]
+    lines.extend(f"• {_escape_markdown(topic)}" for topic in available_topics)
+
+    await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.MARKDOWN_V2)
+
+
+async def handle_subscribe(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle the /subscribe command.
+
+    Shows available topics (excluding already subscribed) and allows subscribing.
+
+    Args:
+        update: The update object.
+        context: The callback context.
+    """
     user_id = update.effective_user.id
     chat_id = update.effective_chat.id
 
     try:
-        store = get_subscription_store()
-        store.add_subscription(user_id, chat_id, query)
+        notion_extractor = bot_context.container.notion_settings_extractor()
+        loop = asyncio.get_running_loop()
+        available_topics = await loop.run_in_executor(
+            None,
+            lambda: _get_available_topics(notion_extractor),
+        )
+    except Exception as exp:
+        logger.error(f"Error fetching available topics: {exp}")
+        await update.message.reply_text("An error occurred while fetching available topics.")
+        return
+
+    if not available_topics:
+        await update.message.reply_text("No topics available for subscription at the moment.")
+        return
+
+    # Get user's current subscriptions to filter them out
+    store = get_subscription_store()
+    user_subscriptions = store.get_user_subscriptions(user_id)
+    subscribed_topics = {sub.query for sub in user_subscriptions}
+
+    # Filter out already subscribed topics
+    unsubscribed_topics = [t for t in available_topics if t not in subscribed_topics]
+
+    # If no arguments, show available topics as buttons
+    if not context.args:
+        if not unsubscribed_topics:
+            await update.message.reply_text(
+                "You are already subscribed to all available topics\\!\n\n"
+                "Use /subscriptions to view your subscriptions\\.",
+                parse_mode=ParseMode.MARKDOWN_V2,
+            )
+            return
+
+        keyboard = build_topic_selection_keyboard(unsubscribed_topics)
+        await update.message.reply_text(
+            "*Available Topics:*\n\nSelect a topic to subscribe:",
+            parse_mode=ParseMode.MARKDOWN_V2,
+            reply_markup=keyboard,
+        )
+        return
+
+    # Validate topic against available topics
+    topic = " ".join(context.args)
+    if topic not in available_topics:
+        keyboard = build_topic_selection_keyboard(unsubscribed_topics) if unsubscribed_topics else None
+        await update.message.reply_text(
+            f"Topic *{_escape_markdown(topic)}* is not available\\.\n\nUse /topics to see all available topics\\.",
+            parse_mode=ParseMode.MARKDOWN_V2,
+            reply_markup=keyboard,
+        )
+        return
+
+    # Check if already subscribed
+    if topic in subscribed_topics:
+        await update.message.reply_text(
+            f"You are already subscribed to *{_escape_markdown(topic)}*\\.",
+            parse_mode=ParseMode.MARKDOWN_V2,
+        )
+        return
+
+    try:
+        store.add_subscription(user_id, chat_id, topic)
         count = store.count_user_subscriptions(user_id)
 
         await update.message.reply_text(
-            f"Subscribed to: *{_escape_markdown(query)}*\n\n"
+            f"Subscribed to: *{_escape_markdown(topic)}*\n\n"
             f"You'll receive updates when new papers match this topic\\.\n"
             f"Current subscriptions: {count}",
             parse_mode=ParseMode.MARKDOWN_V2,
@@ -773,6 +895,43 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
         except Exception as exp:
             logger.error(f"Error finding similar papers: {exp}")
             await query.message.reply_text("An error occurred.")
+
+    elif action == "sub":
+        # Subscribe to a topic from inline keyboard
+        topic = value
+        user_id = update.effective_user.id
+        chat_id = query.message.chat_id
+
+        # Validate topic is allowed (not AdHoc Research)
+        if topic == "AdHoc Research":
+            await query.message.reply_text("This topic is not available for subscription.")
+            return
+
+        try:
+            store = get_subscription_store()
+
+            # Check if already subscribed
+            user_subscriptions = store.get_user_subscriptions(user_id)
+            subscribed_topics = {sub.query for sub in user_subscriptions}
+            if topic in subscribed_topics:
+                await query.message.edit_text(
+                    f"You are already subscribed to *{_escape_markdown(topic)}*\\.",
+                    parse_mode=ParseMode.MARKDOWN_V2,
+                )
+                return
+
+            store.add_subscription(user_id, chat_id, topic)
+            count = store.count_user_subscriptions(user_id)
+
+            await query.message.edit_text(
+                f"Subscribed to: *{_escape_markdown(topic)}*\n\n"
+                f"You'll receive updates when new papers match this topic\\.\n"
+                f"Current subscriptions: {count}",
+                parse_mode=ParseMode.MARKDOWN_V2,
+            )
+        except Exception as exp:
+            logger.error(f"Error subscribing via callback: {exp}")
+            await query.message.reply_text("An error occurred. Please try again.")
 
     elif action == "unsub":
         try:
