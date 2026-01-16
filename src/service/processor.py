@@ -111,7 +111,7 @@ class PapersProcessor:
 
         Args:
             query (str): The query to search for.
-            k (int): The number of papers to return.
+            k (int): The number of papers to return per each day.
             threshold (float): The threshold for the similarity score.
             start_date_str (str | None): The start date to search for (YYYY-MM-DD).
             end_date_str (str | None): The end date to search for (YYYY-MM-DD).
@@ -120,6 +120,9 @@ class PapersProcessor:
 
         # get only papers inside the date range
         filter_conditions = []
+        start_dt = None
+        end_dt = None
+
         # Add a lower-bound date condition if a start date is provided
         if start_date_str:
             start_dt = datetime.strptime(start_date_str, "%Y-%m-%d")  # noqa: DTZ007
@@ -143,10 +146,17 @@ class PapersProcessor:
                 ),
             )
 
+        # Calculate total k based on date range (k is per day)
+        if start_dt and end_dt:
+            num_days = max(1, (end_dt - start_dt).days + 1)
+            total_k = k * num_days
+        else:
+            total_k = k
+
         # Only create a Filter object if there are conditions to apply
         final_filter = qmodels.Filter(must=filter_conditions) if filter_conditions else None
 
-        results = self.vector_store.search(query_embedding, k, threshold, final_filter)
+        results = self.vector_store.search(query_embedding, total_k, threshold, final_filter)
         if results:
             return [Paper(**result.payload) for result in results]  # type: ignore
         return []

@@ -258,7 +258,7 @@ class ArxivFetcher:
                 break
 
             # Be polite to the API
-            time.sleep(3)
+            time.sleep(10)
         return papers
 
     def extract_paper_by_name_or_id(self, name_or_id: str) -> Paper:
@@ -372,7 +372,7 @@ def fetch_papers_day_by_day(
     Yields:
         Iterator[list[Paper]]: A list of unique Paper objects published on a given day.
     """
-    fetcher = ArxivFetcher(page_size=100)
+    fetcher = ArxivFetcher(page_size=150)
     if categories is None:
         categories = list(fetcher.predefined_categories)
 

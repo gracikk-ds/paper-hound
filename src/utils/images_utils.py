@@ -42,24 +42,18 @@ def _get_fitz() -> "fitz_module":  # type: ignore
     return fitz
 
 
-def filter_images_by_size(blk: dict, img_index: int, page_index: int) -> bool:
+def filter_images_by_size(blk: dict) -> bool:
     """Filter images by size.
 
     Args:
         blk (dict): Block object
-        img_index (int): Index of the image
-        page_index (int): Index of the page
 
     Returns:
         bool: True if image is large enough, False otherwise
     """
     blk_width = blk["bbox"][2] - blk["bbox"][0]
     blk_height = blk["bbox"][3] - blk["bbox"][1]
-    if blk_width <= MIN_IMAGE_SIZE and blk_height <= MIN_IMAGE_SIZE:
-        logger.info(f"Skipping image {img_index} on page {page_index} because it's too small.")
-        return True
-    return False
-
+    return blk_width <= MIN_IMAGE_SIZE and blk_height <= MIN_IMAGE_SIZE
 
 def get_block_description(block: dict) -> str:
     """Given a page block, return the text appearing in the block.
@@ -118,12 +112,12 @@ def extract_images(pdf_path: str, output_folder: str = "images") -> None:
         blocks = page.get_text("dict")["blocks"]
         is_inside_picture = False
         coords = None
-        for blk_idx, blk in enumerate(blocks, start=1):
+        for _, blk in enumerate(blocks, start=1):
             if blk["type"] != 1 and not is_inside_picture:
                 continue
 
             if blk["type"] == 1:
-                if filter_images_by_size(blk, blk_idx, page_index):
+                if filter_images_by_size(blk):
                     continue
                 is_inside_picture = True
 

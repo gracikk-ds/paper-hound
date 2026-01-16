@@ -88,7 +88,7 @@ def should_skip_collection_window(
     """
     if collection_start is None or collection_end is None:
         return False
-    return collection_start <= window_start and window_end <= collection_end
+    return collection_start.date() <= window_start.date() and window_end.date() <= collection_end.date()
 
 
 def get_base_paper_id(paper_id: str) -> str:

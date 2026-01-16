@@ -32,7 +32,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     scheduler.start()
 
     # Run the job immediately on startup to debug the workflow
-    app.state.startup_job = asyncio.create_task(workflow_service.run_scheduled_job())
+    # app.state.startup_job = asyncio.create_task(workflow_service.run_scheduled_job())
 
     yield
 

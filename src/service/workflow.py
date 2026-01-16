@@ -25,7 +25,7 @@ from src.utils.load_utils import load_pdf_and_images
 class WorkflowService:
     """Service for managing paper processing workflows."""
 
-    look_back_days: int = 1
+    look_back_days: int = 3
 
     def __init__(  # noqa: PLR0913
         self,
@@ -191,11 +191,19 @@ class WorkflowService:
         sum_costs = 0.0
 
         category_key = category_key or category
-        classifier_prompt = settings.get("Classifier Prompt", "") or ""
-        summarizer_prompt = settings.get("Summarizer Prompt") or ""
-        classifier_prompt_hash = stable_hash(classifier_prompt)
+        classifier_prompt = settings.get("Classifier Prompt") or None
+        summarizer_prompt = settings.get("Summarizer Prompt") or None
+
+        if summarizer_prompt is None:
+            msg = f"Missing 'Summarizer Prompt' in settings for category '{category}'. Cannot proceed."
+            raise ValueError(msg)
+
+        # If classifier prompt is missing, disable classifier for this category
+        if classifier_prompt is None:
+            use_classifier = False
+            logger.info(f"No classifier prompt provided for category '{category}'. Skipping classification.")
+
         summarizer_prompt_hash = stable_hash(summarizer_prompt)
-        classifier_model_name = getattr(self.classifier.llm_client, "model_name", "unknown")
         summarizer_model_name = getattr(self.summarizer.llm_client, "model_name", "unknown")
 
         cached_classifier_hits = 0
@@ -203,18 +211,23 @@ class WorkflowService:
         classifier_calls = 0
         summarizer_calls = 0
 
+        # Only set up classifier-related variables if using classifier
+        classifier_prompt_hash = stable_hash(classifier_prompt) if use_classifier and classifier_prompt else ""
+        classifier_model_name = getattr(self.classifier.llm_client, "model_name", "unknown") if use_classifier else ""
+
         classifier_keys: list[str] = []
         summarizer_keys: list[str] = []
         for paper in candidates:
-            classifier_keys.append(
-                make_cache_key(
-                    paper_id=paper.paper_id,
-                    category_key=category_key,
-                    stage="classifier",
-                    model_name=classifier_model_name,
-                    prompt_hash=classifier_prompt_hash,
-                ),
-            )
+            if use_classifier:
+                classifier_keys.append(
+                    make_cache_key(
+                        paper_id=paper.paper_id,
+                        category_key=category_key,
+                        stage="classifier",
+                        model_name=classifier_model_name,
+                        prompt_hash=classifier_prompt_hash,
+                    ),
+                )
             summarizer_keys.append(
                 make_cache_key(
                     paper_id=paper.paper_id,
@@ -328,6 +341,7 @@ class WorkflowService:
             f"[{category}]: classifier_cache_hits={cached_classifier_hits}, "
             f"summarizer_cache_hits={cached_summarizer_hits}, "
             f"classifier_calls={classifier_calls}, summarizer_calls={summarizer_calls}",
+            f"costs for classifier={cls_costs}, summarizer={sum_costs}",
         )
         return cls_costs, sum_costs, processed_count
 
@@ -355,9 +369,6 @@ class WorkflowService:
         date_start_str = start_date.strftime("%Y-%m-%d")
         date_end_str = end_date.strftime("%Y-%m-%d")
 
-        if not skip_ingestion:
-            embedder_costs = self._ingest_papers(start_date, end_date)
-
         total_cls_costs = 0.0
         total_sum_costs = 0.0
         total_processed = 0
@@ -373,16 +384,28 @@ class WorkflowService:
                 continue
             if category is not None and page_category is not None and page_category != category:
                 continue
+            if page_category == "AdHoc Research":
+                continue
 
-            cls_costs, sum_costs, count = self._process_category(
-                category=page_category,
-                settings=page_settings,
-                date_start_str=date_start_str,
-                date_end_str=date_end_str,
-                top_k=top_k,
-                category_key=page_id,
-                use_classifier=use_classifier,
-            )
+
+            if not skip_ingestion:
+                embedder_costs = self._ingest_papers(start_date, end_date)
+                skip_ingestion = True
+
+            try:
+                cls_costs, sum_costs, count = self._process_category(
+                    category=page_category,
+                    settings=page_settings,
+                    date_start_str=date_start_str,
+                    date_end_str=date_end_str,
+                    top_k=top_k,
+                    category_key=page_id,
+                    use_classifier=use_classifier,
+                )
+            except ValueError as exp:
+                logger.error(f"Skipping category '{page_category}': {exp}")
+                continue
+
             total_cls_costs += cls_costs
             total_sum_costs += sum_costs
             total_processed += count
