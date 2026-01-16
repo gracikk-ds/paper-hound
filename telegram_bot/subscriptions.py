@@ -1,6 +1,7 @@
 """SQLite-based subscription storage for Telegram bot."""
 
 import sqlite3
+import threading
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -254,12 +255,15 @@ class SubscriptionStore:
         )
 
 
-# Global subscription store instance
+# Global subscription store instance with thread-safe initialization
 _subscription_store: SubscriptionStore | None = None
+_subscription_store_lock = threading.Lock()
 
 
 def get_subscription_store(db_path: str = "subscriptions.db") -> SubscriptionStore:
     """Get or create the global subscription store instance.
+
+    Thread-safe singleton pattern using double-checked locking.
 
     Args:
         db_path: Path to the SQLite database file.
@@ -269,5 +273,8 @@ def get_subscription_store(db_path: str = "subscriptions.db") -> SubscriptionSto
     """
     global _subscription_store  # noqa: PLW0603
     if _subscription_store is None:
-        _subscription_store = SubscriptionStore(db_path)
+        with _subscription_store_lock:
+            # Double-check after acquiring lock
+            if _subscription_store is None:
+                _subscription_store = SubscriptionStore(db_path)
     return _subscription_store

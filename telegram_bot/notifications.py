@@ -102,7 +102,7 @@ class NotificationService:
             True if notification was sent, False otherwise.
         """
         # Search for papers matching the subscription query
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         papers = await loop.run_in_executor(
             None,
             lambda: self.processor.search_papers(
@@ -119,7 +119,17 @@ class NotificationService:
 
         # Filter papers that were already notified (based on last_notified_at)
         if subscription.last_notified_at:
-            papers = [p for p in papers if datetime.fromisoformat(p.published_date) > subscription.last_notified_at]
+            filtered_papers = []
+            for p in papers:
+                try:
+                    paper_date = datetime.fromisoformat(p.published_date)
+                    if paper_date > subscription.last_notified_at:
+                        filtered_papers.append(p)
+                except (ValueError, TypeError):
+                    # Skip papers with invalid/missing dates rather than failing the batch
+                    logger.warning(f"Invalid published_date for paper {p.paper_id}: {p.published_date}")
+                    continue
+            papers = filtered_papers
 
         if not papers:
             return False
@@ -145,7 +155,7 @@ class NotificationService:
         """
         try:
             # Try to find summarizer results for this paper in any category
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             # The cache key format includes paper_id, so we search by prefix
             # This is a simplified approach - in production you'd want a more efficient lookup
             results = await loop.run_in_executor(

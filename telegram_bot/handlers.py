@@ -10,7 +10,13 @@ from telegram.ext import ContextTypes
 
 # Import will be resolved at runtime via bot_context
 from telegram_bot.bot import bot_context
-from telegram_bot.formatters import format_paper_detailed, format_search_results, format_similar_results, format_stats
+from telegram_bot.formatters import (
+    _escape_markdown,
+    format_paper_detailed,
+    format_search_results,
+    format_similar_results,
+    format_stats,
+)
 from telegram_bot.keyboards import build_paper_actions_keyboard, build_paper_list_keyboard
 from telegram_bot.subscriptions import get_subscription_store
 
@@ -89,7 +95,7 @@ async def handle_search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
     try:
         processor = bot_context.container.processor()
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         papers = await loop.run_in_executor(
             None,
             lambda: processor.search_papers(query=query, k=5, threshold=0.5),
@@ -130,7 +136,7 @@ async def handle_paper(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
     try:
         processor = bot_context.container.processor()
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         paper = await loop.run_in_executor(None, lambda: processor.get_paper_by_id(paper_id))
 
         if paper is None:
@@ -173,7 +179,7 @@ async def handle_similar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     try:
         processor = bot_context.container.processor()
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         papers = await loop.run_in_executor(
             None,
             lambda: processor.find_similar_papers(paper_id=paper_id, k=5, threshold=0.5),
@@ -216,7 +222,7 @@ async def handle_summarize(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
     try:
         workflow = bot_context.container.workflow()
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         notion_url = await loop.run_in_executor(
             None,
             lambda: workflow.prepare_paper_summary_and_upload(paper_id=paper_id),
@@ -242,7 +248,8 @@ async def handle_insert(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         context: The callback context.
     """
     user_id = update.effective_user.id
-    if bot_context.admin_user_ids and user_id not in bot_context.admin_user_ids:
+    # Fail-closed: if no admins configured, block everyone
+    if not bot_context.admin_user_ids or user_id not in bot_context.admin_user_ids:
         await update.message.reply_text("This command is restricted to administrators.")
         return
 
@@ -267,7 +274,7 @@ async def handle_insert(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
     try:
         processor = bot_context.container.processor()
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         await loop.run_in_executor(
             None,
             lambda: processor.insert_papers(start_date, end_date),
@@ -301,7 +308,7 @@ async def handle_subscribe(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         count = store.count_user_subscriptions(user_id)
 
         await update.message.reply_text(
-            f"Subscribed to: *{query}*\n\n"
+            f"Subscribed to: *{_escape_markdown(query)}*\n\n"
             f"You'll receive updates when new papers match this topic\\.\n"
             f"Current subscriptions: {count}",
             parse_mode=ParseMode.MARKDOWN_V2,
@@ -360,7 +367,7 @@ async def handle_subscriptions(update: Update, context: ContextTypes.DEFAULT_TYP
     lines = ["*Your Subscriptions:*\n"]
     for sub in subscriptions:
         created = sub.created_at.strftime("%Y\\-%m\\-%d")
-        lines.append(f"• \\#{sub.id}: _{sub.query}_ \\(since {created}\\)")
+        lines.append(f"• \\#{sub.id}: _{_escape_markdown(sub.query)}_ \\(since {created}\\)")
 
     await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.MARKDOWN_V2)
 
@@ -374,7 +381,7 @@ async def handle_stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     """
     try:
         processor = bot_context.container.processor()
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         count = await loop.run_in_executor(None, processor.count_papers)
 
         message = format_stats(count)
@@ -411,7 +418,7 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
 
         if paper is None:
             processor = bot_context.container.processor()
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             paper = await loop.run_in_executor(None, lambda: processor.get_paper_by_id(paper_id))
 
         if paper:
@@ -434,7 +441,7 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
 
         try:
             workflow = bot_context.container.workflow()
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             notion_url = await loop.run_in_executor(
                 None,
                 lambda: workflow.prepare_paper_summary_and_upload(paper_id=paper_id),
@@ -460,7 +467,7 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
 
         try:
             processor = bot_context.container.processor()
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             papers = await loop.run_in_executor(
                 None,
                 lambda: processor.find_similar_papers(paper_id=paper_id, k=5, threshold=0.5),
@@ -482,7 +489,12 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
             await query.message.reply_text("An error occurred.")
 
     elif action == "unsub":
-        subscription_id = int(value)
+        try:
+            subscription_id = int(value)
+        except ValueError:
+            await query.message.reply_text("Invalid subscription ID.")
+            return
+
         user_id = update.effective_user.id
         store = get_subscription_store()
 

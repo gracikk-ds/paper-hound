@@ -137,6 +137,8 @@ def _escape_markdown(text: str) -> str:
     Returns:
         Escaped text safe for MarkdownV2.
     """
+    # Backslash must be escaped first to avoid double-escaping
+    text = text.replace("\\", "\\\\")
     special_chars = ["_", "*", "[", "]", "(", ")", "~", "`", ">", "#", "+", "-", "=", "|", "{", "}", ".", "!"]
     for char in special_chars:
         text = text.replace(char, f"\\{char}")
