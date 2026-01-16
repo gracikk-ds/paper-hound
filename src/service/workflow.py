@@ -102,15 +102,8 @@ class WorkflowService:
         # Reset per-call cost; otherwise callers may accidentally attribute a previous request's cost.
         self.summarizer.inference_price = 0.0
 
-        # Extract paper information
-        paper = self.processor.get_paper_by_id(paper_id)
-        if paper is None:
-            try:
-                paper = self.arxiv_fetcher.extract_paper_by_name_or_id(paper_id)
-            except Exception as exp:  # noqa: BLE001
-                logger.error(f"Failed to fetch paper {paper_id}: {exp}")
-                return None
-
+        # Fetch paper from storage or arXiv (stores if fetched from arXiv)
+        paper = self.processor.fetch_and_store_paper(paper_id, self.arxiv_fetcher)
         if paper is None:
             logger.error(f"Paper {paper_id} not found.")
             return None
@@ -386,7 +379,6 @@ class WorkflowService:
                 continue
             if page_category == "AdHoc Research":
                 continue
-
 
             if not skip_ingestion:
                 embedder_costs = self._ingest_papers(start_date, end_date)

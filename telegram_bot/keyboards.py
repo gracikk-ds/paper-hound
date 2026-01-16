@@ -92,3 +92,16 @@ def build_topic_selection_keyboard(topics: list[str]) -> InlineKeyboardMarkup:
     """
     buttons = [[InlineKeyboardButton(topic, callback_data=f"sub:{topic}")] for topic in topics]
     return InlineKeyboardMarkup(buttons)
+
+
+def build_unsubscribe_selection_keyboard(subscriptions: list) -> InlineKeyboardMarkup:
+    """Build inline keyboard for unsubscribe selection.
+
+    Args:
+        subscriptions: List of Subscription objects with id and query attributes.
+
+    Returns:
+        InlineKeyboardMarkup with unsubscribe buttons (one per row).
+    """
+    buttons = [[InlineKeyboardButton(f"❌ {sub.query}", callback_data=f"unsub:{sub.id}")] for sub in subscriptions]
+    return InlineKeyboardMarkup(buttons)

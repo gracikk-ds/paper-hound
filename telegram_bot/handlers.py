@@ -26,6 +26,7 @@ from telegram_bot.keyboards import (
     build_paper_actions_keyboard,
     build_paper_list_keyboard,
     build_topic_selection_keyboard,
+    build_unsubscribe_selection_keyboard,
 )
 from telegram_bot.subscriptions import get_subscription_store
 
@@ -263,7 +264,7 @@ Accepts arXiv URLs or plain IDs
 *Subscription Commands:*
 /topics \\- Show all available topics
 /subscribe \\- Subscribe to a topic \\(shows unsubscribed topics\\)
-/unsubscribe \\<id\\> \\- Remove a subscription
+/unsubscribe \\- Remove a subscription \\(shows your subscriptions\\)
 /subscriptions \\- List your active subscriptions
 
 *Other Commands:*
@@ -393,16 +394,14 @@ async def handle_paper(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
     try:
         processor = bot_context.container.processor()
+        arxiv_fetcher = bot_context.container.arxiv_fetcher()
         loop = asyncio.get_running_loop()
-        paper = await loop.run_in_executor(None, lambda: processor.get_paper_by_id(paper_id))
 
-        if paper is None:
-            # Try fetching from arXiv
-            arxiv_fetcher = bot_context.container.arxiv_fetcher()
-            paper = await loop.run_in_executor(
-                None,
-                lambda: arxiv_fetcher.extract_paper_by_name_or_id(paper_id),
-            )
+        # Fetch from storage or arXiv (stores if fetched from arXiv)
+        paper = await loop.run_in_executor(
+            None,
+            lambda: processor.fetch_and_store_paper(paper_id, arxiv_fetcher),
+        )
 
         if paper is None:
             await update.message.reply_text(f"Paper not found: {paper_id}")
@@ -453,11 +452,23 @@ async def handle_similar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     try:
         processor = bot_context.container.processor()
+        arxiv_fetcher = bot_context.container.arxiv_fetcher()
         loop = asyncio.get_running_loop()
+
+        # Ensure paper is in storage (fetch and store if needed)
+        source_paper = await loop.run_in_executor(
+            None,
+            lambda: processor.fetch_and_store_paper(paper_id, arxiv_fetcher),
+        )
+
+        if source_paper is None:
+            await update.message.reply_text(f"Paper not found: {paper_id}")
+            return
+
         papers = await loop.run_in_executor(
             None,
             lambda: processor.find_similar_papers(
-                paper_id=paper_id,
+                paper_id=source_paper.paper_id,
                 k=params.top_k,
                 threshold=params.threshold,
                 start_date_str=params.start_date_str,
@@ -718,29 +729,29 @@ async def handle_subscribe(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 async def handle_unsubscribe(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle the /unsubscribe command.
 
+    Shows user's active subscriptions and allows unsubscribing via buttons.
+
     Args:
         update: The update object.
         context: The callback context.
     """
-    if not context.args:
+    user_id = update.effective_user.id
+    store = get_subscription_store()
+    subscriptions = store.get_user_subscriptions(user_id)
+
+    if not subscriptions:
         await update.message.reply_text(
-            "Usage: /unsubscribe <subscription_id>\nUse /subscriptions to see your subscription IDs.",
+            "You have no active subscriptions\\.\n\nUse `/subscribe` to create one\\.",
+            parse_mode=ParseMode.MARKDOWN_V2,
         )
         return
 
-    try:
-        subscription_id = int(context.args[0])
-    except ValueError:
-        await update.message.reply_text("Invalid subscription ID. Must be a number.")
-        return
-
-    user_id = update.effective_user.id
-    store = get_subscription_store()
-
-    if store.deactivate_subscription(subscription_id, user_id):
-        await update.message.reply_text(f"Unsubscribed from subscription #{subscription_id}.")
-    else:
-        await update.message.reply_text("Subscription not found or already inactive.")
+    keyboard = build_unsubscribe_selection_keyboard(subscriptions)
+    await update.message.reply_text(
+        "*Your Subscriptions:*\n\nSelect a subscription to remove:",
+        parse_mode=ParseMode.MARKDOWN_V2,
+        reply_markup=keyboard,
+    )
 
 
 async def handle_subscriptions(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -756,7 +767,7 @@ async def handle_subscriptions(update: Update, context: ContextTypes.DEFAULT_TYP
 
     if not subscriptions:
         await update.message.reply_text(
-            "You have no active subscriptions\\.\n\nUse `/subscribe <topic>` to create one\\.",
+            "You have no active subscriptions\\.\n\nUse `/subscribe` to create one\\.",
             parse_mode=ParseMode.MARKDOWN_V2,
         )
         return
@@ -815,8 +826,13 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
 
         if paper is None:
             processor = bot_context.container.processor()
+            arxiv_fetcher = bot_context.container.arxiv_fetcher()
             loop = asyncio.get_running_loop()
-            paper = await loop.run_in_executor(None, lambda: processor.get_paper_by_id(paper_id))
+            # Fetch from storage or arXiv (stores if fetched from arXiv)
+            paper = await loop.run_in_executor(
+                None,
+                lambda: processor.fetch_and_store_paper(paper_id, arxiv_fetcher),
+            )
 
         if paper:
             message = format_paper_detailed(paper)
@@ -879,10 +895,22 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
 
         try:
             processor = bot_context.container.processor()
+            arxiv_fetcher = bot_context.container.arxiv_fetcher()
             loop = asyncio.get_running_loop()
+
+            # Ensure paper is in storage (fetch and store if needed)
+            source_paper = await loop.run_in_executor(
+                None,
+                lambda: processor.fetch_and_store_paper(paper_id, arxiv_fetcher),
+            )
+
+            if source_paper is None:
+                await query.message.reply_text(f"Paper not found: {paper_id}")
+                return
+
             papers = await loop.run_in_executor(
                 None,
-                lambda: processor.find_similar_papers(paper_id=paper_id, k=5, threshold=0.5),
+                lambda: processor.find_similar_papers(paper_id=source_paper.paper_id, k=5, threshold=0.5),
             )
 
             if papers:

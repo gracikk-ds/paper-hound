@@ -14,7 +14,7 @@ from datetime import date, datetime, timedelta
 from loguru import logger
 from qdrant_client import models as qmodels
 
-from src.service.arxiv.arxiv_fetcher import fetch_papers_day_by_day
+from src.service.arxiv.arxiv_fetcher import ArxivFetcher, fetch_papers_day_by_day
 from src.service.vector_db.embedder import EmbeddingService
 from src.service.vector_db.vector_storage import QdrantVectorStore
 from src.utils.schemas import Paper
@@ -167,6 +167,47 @@ class PapersProcessor:
         if results:
             return Paper(**results[0].payload)  # type: ignore[missing-argument]
         return None
+
+    def fetch_and_store_paper(self, paper_id: str, arxiv_fetcher: ArxivFetcher) -> Paper | None:
+        """Fetch a paper from storage or arXiv, storing it if fetched from arXiv.
+
+        This method first checks if the paper exists in the vector store. If not found,
+        it fetches the paper from arXiv, generates an embedding for its summary, and
+        stores it in the vector store for future use.
+
+        Args:
+            paper_id (str): The ID or name of the paper to fetch.
+            arxiv_fetcher (ArxivFetcher): The arXiv fetcher instance to use.
+
+        Returns:
+            Paper | None: The paper if found or fetched successfully, None otherwise.
+        """
+        # Check storage first
+        paper = self.get_paper_by_id(paper_id)
+        if paper is not None:
+            return paper
+
+        # Fetch from arXiv
+        try:
+            paper = arxiv_fetcher.extract_paper_by_name_or_id(paper_id)
+        except Exception as exp:  # noqa: BLE001
+            logger.error(f"Failed to fetch paper {paper_id} from arXiv: {exp}")
+            return None
+
+        if paper is None:
+            return None
+
+        # Embed and store
+        logger.info(f"Storing paper {paper.paper_id} fetched from arXiv into vector store.")
+        embedding = self.embedding_service.embed_text(paper.summary)
+        self.vector_store.upsert(
+            ids=[paper.paper_id],
+            vectors=[embedding],
+            payloads=[paper],
+            skip_existing=False,
+            embedding_model=self.embedding_service.model_name,
+        )
+        return paper
 
     def find_similar_papers(
         self,
