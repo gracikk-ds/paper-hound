@@ -183,33 +183,6 @@ def parse_summarize_params(args: list[str]) -> SummarizeParams:
     return SummarizeParams(paper_id=paper_id, category=category)
 
 
-def _resolve_summarizer_prompt(notion_extractor: NotionPageExtractor, category: str) -> str | None:
-    """Resolve the summarizer prompt from Notion settings based on category.
-
-    Args:
-        notion_extractor: The Notion page extractor instance.
-        category: The research category to look up.
-
-    Returns:
-        The summarizer prompt string if found, None otherwise.
-    """
-    database_id = api_settings.notion_command_database_id
-    if not database_id:
-        return None
-
-    try:
-        for page_id in notion_extractor.query_database(database_id):
-            page_settings = notion_extractor.extract_settings_from_page(page_id)
-            if page_settings is None:
-                continue
-            if page_settings.get("Page Name", "").strip() == category:
-                return page_settings.get("Summarizer Prompt", None)
-    except Exception:
-        logger.exception("Error resolving summarizer prompt")
-
-    return None
-
-
 def _get_available_topics(notion_extractor: NotionPageExtractor) -> list[str]:
     """Get list of available subscription topics from Notion database.
 
@@ -528,26 +501,12 @@ async def handle_summarize(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     )
 
     try:
-        # Resolve summarizer prompt from Notion settings based on category
-        notion_extractor = bot_context.container.notion_settings_extractor()
         workflow = bot_context.container.workflow()
         loop = asyncio.get_running_loop()
 
-        summarizer_prompt = await loop.run_in_executor(
-            None,
-            lambda: _resolve_summarizer_prompt(notion_extractor, params.category),
-        )
-
-        if summarizer_prompt is None:
-            logger.warning(f"No prompt found for category '{params.category}', using default")
-
         notion_url = await loop.run_in_executor(
             None,
-            lambda: workflow.prepare_paper_summary_and_upload(
-                paper_id=params.paper_id,
-                summarizer_prompt=summarizer_prompt,
-                category=params.category,
-            ),
+            lambda: workflow.prepare_paper_summary_and_upload(paper_id=params.paper_id, category=params.category),
         )
 
         if notion_url:
@@ -619,10 +578,7 @@ async def handle_topics(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     try:
         notion_extractor = bot_context.container.notion_settings_extractor()
         loop = asyncio.get_running_loop()
-        available_topics = await loop.run_in_executor(
-            None,
-            lambda: _get_available_topics(notion_extractor),
-        )
+        available_topics = await loop.run_in_executor(None, lambda: _get_available_topics(notion_extractor))
     except Exception as exp:
         logger.error(f"Error fetching available topics: {exp}")
         await update.message.reply_text("An error occurred while fetching available topics.")
@@ -633,7 +589,7 @@ async def handle_topics(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         return
 
     lines = ["*Available Topics:*\n"]
-    lines.extend(f"• {_escape_markdown(topic)}" for topic in available_topics)
+    lines.extend(f"{idx + 1}. {_escape_markdown(topic)}" for idx, topic in enumerate(available_topics))
 
     await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.MARKDOWN_V2)
 
@@ -856,23 +812,12 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
         )
 
         try:
-            notion_extractor = bot_context.container.notion_settings_extractor()
             workflow = bot_context.container.workflow()
             loop = asyncio.get_running_loop()
 
-            # Resolve prompt from Notion settings
-            summarizer_prompt = await loop.run_in_executor(
-                None,
-                lambda: _resolve_summarizer_prompt(notion_extractor, category),
-            )
-
             notion_url = await loop.run_in_executor(
                 None,
-                lambda: workflow.prepare_paper_summary_and_upload(
-                    paper_id=paper_id,
-                    summarizer_prompt=summarizer_prompt,
-                    category=category,
-                ),
+                lambda: workflow.prepare_paper_summary_and_upload(paper_id=paper_id, category=category),
             )
 
             if notion_url:
