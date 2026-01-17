@@ -77,7 +77,6 @@ class SummarizeRequest(BaseModel):
     """Request model for summarizing a paper."""
 
     paper_id: str
-    summarizer_prompt: str | None = None
     category: str = "AdHoc Research"
 
 
