@@ -575,6 +575,7 @@ async def handle_topics(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         update: The update object.
         context: The callback context.
     """
+    await update.message.reply_text("Fetching available topics\\.\\.\\.", parse_mode=ParseMode.MARKDOWN_V2)
     try:
         notion_extractor = bot_context.container.notion_settings_extractor()
         loop = asyncio.get_running_loop()
@@ -588,8 +589,8 @@ async def handle_topics(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         await update.message.reply_text("No topics available at the moment.")
         return
 
-    lines = ["*Available Topics:*\n"]
-    lines.extend(f"{idx + 1}. {_escape_markdown(topic)}" for idx, topic in enumerate(available_topics))
+    lines = ["*Available Topics:*"]
+    lines.extend(f"{idx + 1}\\. {_escape_markdown(topic)}" for idx, topic in enumerate(available_topics))
 
     await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.MARKDOWN_V2)
 
@@ -799,7 +800,7 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                 reply_markup=keyboard,
             )
         else:
-            await query.message.reply_text(f"Paper not found: {paper_id}")
+            await query.message.reply_text(f"Paper not found: {paper_id}.")
 
     elif action == "summarize":
         paper_id = normalize_paper_id(value)
@@ -850,7 +851,7 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
             )
 
             if source_paper is None:
-                await query.message.reply_text(f"Paper not found: {paper_id}")
+                await query.message.reply_text(f"Paper not found: {paper_id}.")
                 return
 
             papers = await loop.run_in_executor(
@@ -868,7 +869,7 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                     reply_markup=keyboard,
                 )
             else:
-                await query.message.reply_text(f"No similar papers found for: {paper_id}")
+                await query.message.reply_text(f"No similar papers found for: {paper_id}.")
         except Exception as exp:
             logger.error(f"Error finding similar papers: {exp}")
             await query.message.reply_text("An error occurred.")
@@ -921,6 +922,6 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
         store = get_subscription_store()
 
         if store.deactivate_subscription(subscription_id, user_id):
-            await query.message.edit_text(f"Unsubscribed from subscription #{subscription_id}.")
+            await query.message.edit_text("Subscription deactivated.")
         else:
             await query.message.reply_text("Subscription not found or already inactive.")

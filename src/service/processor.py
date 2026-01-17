@@ -43,19 +43,12 @@ class PapersProcessor:
         Returns:
             float: The costs of the embedding service.
         """
-        collection_start_date_str, collection_end_date_str = self.vector_store.find_start_end_dates()
-
         start_date_str = start_date.strftime("%Y-%m-%d")
         end_date_str = end_date.strftime("%Y-%m-%d")
 
         embedder_costs = 0.0
         current_embedding_model = self.embedding_service.model_name
-        for papers in fetch_papers_day_by_day(
-            start_date_str,
-            end_date_str,
-            collection_start_date_str,
-            collection_end_date_str,
-        ):
+        for papers in fetch_papers_day_by_day(start_date_str, end_date_str):
             paper_ids = [paper.paper_id for paper in papers]
 
             # Pre-check Qdrant: if the point exists and embedding_model matches, skip embedding.

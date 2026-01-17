@@ -108,7 +108,7 @@ class WorkflowService:
             existing_page = self.notion_uploader.find_paper_page(paper_id)
             if existing_page:
                 existing_categories = existing_page.get("categories", [])
-                if category not in existing_categories:
+                if category != "AdHoc Research" and category not in existing_categories:
                     page_id = existing_page.get("page_id")
                     if page_id:
                         self.notion_uploader.add_category_to_page(page_id, category)
