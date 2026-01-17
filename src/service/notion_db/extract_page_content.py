@@ -128,7 +128,7 @@ class NotionPageExtractor:
             dict: Dictionary of settings.
         """
         blocks = self.get_blocks(page_id)
-        settings = {"Query Prompt": None, "Classifier Prompt": None, "Summarizer Prompt": None}
+        settings = {"Query Prompt": None, "Classifier Prompt": None}
         current_setting = None
         for block in blocks:
             block_type = block.get("type")
