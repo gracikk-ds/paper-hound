@@ -773,9 +773,9 @@ async def handle_subscriptions(update: Update, context: ContextTypes.DEFAULT_TYP
         return
 
     lines = ["*Your Subscriptions:*\n"]
-    for sub in subscriptions:
+    for idx, sub in enumerate(subscriptions):
         created = sub.created_at.strftime("%Y\\-%m\\-%d")
-        lines.append(f"• \\#{sub.id}: _{_escape_markdown(sub.query)}_ \\(since {created}\\)")
+        lines.append(f"• \\#{idx + 1}: _{_escape_markdown(sub.query)}_ \\(since {created}\\)")
 
     await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.MARKDOWN_V2)
 
