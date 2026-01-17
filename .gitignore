@@ -10,7 +10,7 @@ __pycache__/
 TODO
 
 # Temporary storage
-tmp_storage/
+storage/
 # Distribution / packaging
 .Python
 build/

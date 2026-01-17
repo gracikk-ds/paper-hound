@@ -24,6 +24,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY src/ src/
 COPY prompts/ prompts/
 COPY scripts/ scripts/
+COPY telegram_bot/ telegram_bot/
 
 # Expose port
 EXPOSE 8000

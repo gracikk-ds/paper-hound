@@ -372,18 +372,23 @@ def download_pdf(pdf_url: str, pdf_path: Path, max_size: int = MAX_PDF_SIZE_BYTE
         raise ValueError(msg)
 
 
-def load_pdf_and_images(paper: Paper) -> tuple[Path | None, Path | None]:
+def load_pdf_and_images(paper: Paper, tmp_storage_dir: str) -> tuple[Path | None, Path | None]:
     """Load the PDF and images for the paper.
 
     Args:
         paper (Paper): the paper to load.
+        tmp_storage_dir (str): the path to the temporary storage directory.
 
     Returns:
         tuple[Path, Path]: the path to the PDF and the path to the images.
     """
     file_name = f"{paper.title.replace(' ', '_').lower()}.pdf"
-    tmp_pdf_path = Path("tmp_storage/tmp_pdfs") / file_name
-    tmp_images_path = Path("tmp_storage/tmp_images") / file_name
+    tmp_pdf_path = Path(tmp_storage_dir) / "tmp_pdfs"
+    tmp_pdf_path.mkdir(parents=True, exist_ok=True)
+    tmp_pdf_path = tmp_pdf_path / file_name
+    tmp_images_path = Path(tmp_storage_dir) / "tmp_images"
+    tmp_images_path.mkdir(parents=True, exist_ok=True)
+    tmp_images_path = tmp_images_path / file_name
     try:
         download_pdf(paper.pdf_url, tmp_pdf_path)
         extract_images(str(tmp_pdf_path), str(tmp_images_path))
