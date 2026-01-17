@@ -43,6 +43,16 @@ def make_cache_key(*, paper_id: str, category_key: str, stage: Stage, model_name
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()
 
 
+def make_summarizer_cache_key(paper_id: str) -> str:
+    """Return a stable cache key for a summarizer result based only on paper_id.
+
+    This simplified key ensures that a paper is only summarized once,
+    regardless of category, model, or prompt changes.
+    """
+    payload = {"paper_id": paper_id, "stage": "summarizer"}
+    return hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()
+
+
 def _qdrant_point_id(cache_key: str) -> str:
     """Create a deterministic Qdrant point id from a cache key."""
     return str(uuid.uuid5(uuid.NAMESPACE_URL, cache_key))
@@ -228,6 +238,50 @@ class ProcessingCacheStore:
             "stage": "summarizer",
             "model_name": model_name,
             "prompt_hash": prompt_hash,
+            "status": status,
+            "notion_page_url": notion_page_url,
+            "updated_at": _utc_now_iso(),
+        }
+        point = qmodels.PointStruct(id=point_id, vector=[0.0], payload=payload)
+        try:
+            self.client.upsert(collection_name=self.collection, points=[point], wait=True)
+        except Exception as exp:  # noqa: BLE001
+            logger.error(f"Failed to upsert summarizer cache record: {exp}")
+
+    def get_summarizer_result_by_paper_id(self, paper_id: str) -> CachedSummarizerResult | None:
+        """Fetch summarizer result for a paper using only paper_id.
+
+        Args:
+            paper_id: The paper ID to look up.
+
+        Returns:
+            CachedSummarizerResult if found and valid, otherwise None.
+        """
+        cache_key = make_summarizer_cache_key(paper_id)
+        results = self.get_summarizer_results([cache_key])
+        return results.get(cache_key)
+
+    def put_summarizer_result_by_paper_id(
+        self,
+        *,
+        paper_id: str,
+        status: Literal["success", "failed"],
+        notion_page_url: str | None = None,
+    ) -> None:
+        """Upsert a summarizer result using only paper_id as the cache key.
+
+        Args:
+            paper_id: The paper ID.
+            status: The result status ("success" or "failed").
+            notion_page_url: The Notion page URL if successful.
+        """
+        self.ensure_collection()
+        cache_key = make_summarizer_cache_key(paper_id)
+        point_id = _qdrant_point_id(cache_key)
+        payload: dict[str, Any] = {
+            "cache_key": cache_key,
+            "paper_id": paper_id,
+            "stage": "summarizer",
             "status": status,
             "notion_page_url": notion_page_url,
             "updated_at": _utc_now_iso(),

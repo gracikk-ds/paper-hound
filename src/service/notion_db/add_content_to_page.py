@@ -93,6 +93,108 @@ class MarkdownToNotionUploader:
             logger.error(f"Error checking if paper exists: {exp}")
             return None
 
+    def find_paper_page(self, arxiv_url: str) -> dict[str, Any] | None:
+        """Find an existing Notion page for a paper by its ArXiv URL/id.
+
+        Args:
+            arxiv_url: Either a raw arXiv id (e.g. "2601.02242") or the full URL value
+                that is stored in the Notion "Arxiv" URL property.
+
+        Returns:
+            A dict with 'page_id', 'page_url', and 'categories' (list of str) if found,
+            otherwise None.
+        """
+        url = f"{self.base_url}/databases/{self.database_id}/query"
+        expected_url = (
+            arxiv_url if arxiv_url.startswith(("http://", "https://")) else f"https://www.alphaxiv.org/abs/{arxiv_url}"
+        )
+        payload: dict[str, Any] = {
+            "filter": {
+                "property": "Arxiv",
+                "url": {"equals": expected_url},
+            },
+        }
+        try:
+            response = requests.post(url, headers=self.headers, json=payload, timeout=30)
+            response.raise_for_status()
+            data = response.json()
+            results = data.get("results", []) or []
+            if not results:
+                return None
+
+            page = results[0]
+            page_id = page.get("id")
+            page_url = page.get("url")
+
+            # Extract existing categories from multi_select property
+            categories: list[str] = []
+            props = page.get("properties", {})
+            category_prop = props.get("Category", {})
+            if category_prop.get("type") == "multi_select":
+                for item in category_prop.get("multi_select", []):
+                    name = item.get("name")
+                    if name:
+                        categories.append(name)
+        except Exception as exp:  # noqa: BLE001
+            logger.error(f"Error finding paper page: {exp}")
+            return None
+        else:
+            return {
+                "page_id": page_id,
+                "page_url": page_url,
+                "categories": categories,
+            }
+
+    def add_category_to_page(self, page_id: str, category: str) -> bool:
+        """Add a category to an existing Notion page's multi_select Category property.
+
+        Args:
+            page_id: The Notion page ID.
+            category: The category name to add.
+
+        Returns:
+            True if successful, False otherwise.
+        """
+        # First, fetch current categories
+        url = f"{self.base_url}/pages/{page_id}"
+        try:
+            response = requests.get(url, headers=self.headers, timeout=30)
+            response.raise_for_status()
+            page = response.json()
+
+            # Extract existing categories
+            existing_categories: list[str] = []
+            props = page.get("properties", {})
+            category_prop = props.get("Category", {})
+            if category_prop.get("type") == "multi_select":
+                for item in category_prop.get("multi_select", []):
+                    name = item.get("name")
+                    if name:
+                        existing_categories.append(name)
+
+            # Check if category already exists
+            if category in existing_categories:
+                logger.info(f"Category '{category}' already exists on page {page_id}")
+                return True
+
+            # Add new category to the list
+            existing_categories.append(category)
+
+            # Update the page with new categories
+            update_payload: dict[str, Any] = {
+                "properties": {
+                    "Category": {"multi_select": [{"name": cat} for cat in existing_categories]},
+                },
+            }
+            update_response = requests.patch(url, headers=self.headers, json=update_payload, timeout=30)
+            update_response.raise_for_status()
+            logger.info(f"Added category '{category}' to page {page_id}")
+        except Exception as exp:  # noqa: BLE001
+            logger.error(f"Error adding category to page {page_id}: {exp}")
+            return False
+        else:
+            return True
+
     def _parse_rich_text(self, line: str) -> list[dict[str, Any]]:
         """Parse a line for **bold** markdown and return Notion rich_text objects.
 

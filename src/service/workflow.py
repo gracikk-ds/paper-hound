@@ -83,17 +83,15 @@ class WorkflowService:
         else:
             return costs
 
-    def prepare_paper_summary_and_upload(
+    def prepare_paper_summary_and_upload(  # noqa: PLR0912
         self,
         paper_id: str,
-        summarizer_prompt: str | None = None,
         category: str = "AdHoc Research",
     ) -> str | None:
         """Process a single paper: fetch, download, summarize, and upload to Notion.
 
         Args:
             paper_id (str): The ID of the paper to process.
-            summarizer_prompt (str | None): Custom prompt for summarization.
             category (str): Category for Notion upload.
 
         Returns:
@@ -101,6 +99,21 @@ class WorkflowService:
         """
         # Reset per-call cost; otherwise callers may accidentally attribute a previous request's cost.
         self.summarizer.inference_price = 0.0
+
+        # Check cache using only paper_id
+        cached_result = self.processing_cache.get_summarizer_result_by_paper_id(paper_id)
+        if cached_result is not None and cached_result.status == "success" and cached_result.notion_page_url:
+            logger.info(f"Cache hit for paper {paper_id}. Checking if category '{category}' needs to be added.")
+            # Check if the category needs to be added to the existing Notion page
+            existing_page = self.notion_uploader.find_paper_page(paper_id)
+            if existing_page:
+                existing_categories = existing_page.get("categories", [])
+                if category not in existing_categories:
+                    page_id = existing_page.get("page_id")
+                    if page_id:
+                        self.notion_uploader.add_category_to_page(page_id, category)
+                        logger.info(f"Added category '{category}' to existing page for paper {paper_id}")
+            return cached_result.notion_page_url
 
         # Fetch paper from storage or arXiv (stores if fetched from arXiv)
         paper = self.processor.fetch_and_store_paper(paper_id, self.arxiv_fetcher)
@@ -114,19 +127,48 @@ class WorkflowService:
             return None
 
         # Summarize paper
+        url: str | None = None
         try:
-            _, md_path_str = self.summarizer.summarize(paper, tmp_pdf_path, summarizer_prompt)
+            _, md_path_str = self.summarizer.summarize(paper, tmp_pdf_path)
             if md_path_str is None:
                 logger.error(f"Error summarizing paper: {paper.title}")
+                # Cache the failed result
+                self.processing_cache.put_summarizer_result_by_paper_id(
+                    paper_id=paper_id,
+                    status="failed",
+                    notion_page_url=None,
+                )
                 return None
 
             md_path = Path(md_path_str)
             add_images_to_md(md_path_str, str(tmp_images_path), paper.model_dump())
 
             # Upload summary to notion
-            return self.notion_uploader.upload_markdown_file(md_path_str, category=category)
+            url = self.notion_uploader.upload_markdown_file(md_path_str, category=category)
+
+            # Cache the result
+            if url:
+                self.processing_cache.put_summarizer_result_by_paper_id(
+                    paper_id=paper_id,
+                    status="success",
+                    notion_page_url=url,
+                )
+            else:
+                self.processing_cache.put_summarizer_result_by_paper_id(
+                    paper_id=paper_id,
+                    status="failed",
+                    notion_page_url=None,
+                )
+            return url  # noqa: TRY300
+
         except Exception as exp:  # noqa: BLE001
             logger.error(f"Error processing paper {paper.title}: {exp}")
+            # Cache the failed result
+            self.processing_cache.put_summarizer_result_by_paper_id(
+                paper_id=paper_id,
+                status="failed",
+                notion_page_url=None,
+            )
             return None
         finally:
             # Clean up
@@ -185,22 +227,13 @@ class WorkflowService:
 
         category_key = category_key or category
         classifier_prompt = settings.get("Classifier Prompt") or None
-        summarizer_prompt = settings.get("Summarizer Prompt") or None
-
-        if summarizer_prompt is None:
-            msg = f"Missing 'Summarizer Prompt' in settings for category '{category}'. Cannot proceed."
-            raise ValueError(msg)
 
         # If classifier prompt is missing, disable classifier for this category
         if classifier_prompt is None:
             use_classifier = False
             logger.info(f"No classifier prompt provided for category '{category}'. Skipping classification.")
 
-        summarizer_prompt_hash = stable_hash(summarizer_prompt)
-        summarizer_model_name = getattr(self.summarizer.llm_client, "model_name", "unknown")
-
         cached_classifier_hits = 0
-        cached_summarizer_hits = 0
         classifier_calls = 0
         summarizer_calls = 0
 
@@ -208,11 +241,11 @@ class WorkflowService:
         classifier_prompt_hash = stable_hash(classifier_prompt) if use_classifier and classifier_prompt else ""
         classifier_model_name = getattr(self.classifier.llm_client, "model_name", "unknown") if use_classifier else ""
 
+        # Build classifier cache keys for batch retrieval
         classifier_keys: list[str] = []
-        summarizer_keys: list[str] = []
-        for paper in candidates:
-            if use_classifier:
-                classifier_keys.append(
+        if use_classifier:
+            for paper in candidates:
+                classifier_keys.append(  # noqa: PERF401
                     make_cache_key(
                         paper_id=paper.paper_id,
                         category_key=category_key,
@@ -221,18 +254,8 @@ class WorkflowService:
                         prompt_hash=classifier_prompt_hash,
                     ),
                 )
-            summarizer_keys.append(
-                make_cache_key(
-                    paper_id=paper.paper_id,
-                    category_key=category_key,
-                    stage="summarizer",
-                    model_name=summarizer_model_name,
-                    prompt_hash=summarizer_prompt_hash,
-                ),
-            )
 
         classifier_cache = self.processing_cache.get_classifier_results(classifier_keys) if use_classifier else {}
-        summarizer_cache = self.processing_cache.get_summarizer_results(summarizer_keys)
 
         for paper in candidates:
             try:
@@ -271,55 +294,14 @@ class WorkflowService:
                     else:
                         logger.info(f"Processing '{paper.title}' (classifier skipped)...")
 
-                    sum_key = make_cache_key(
+                    # Summarizer caching is now handled internally by prepare_paper_summary_and_upload
+                    url = self.prepare_paper_summary_and_upload(
                         paper_id=paper.paper_id,
-                        category_key=category_key,
-                        stage="summarizer",
-                        model_name=summarizer_model_name,
-                        prompt_hash=summarizer_prompt_hash,
+                        category=category,
                     )
-
-                    cached_sum = summarizer_cache.get(sum_key)
-                    summarizer_cache_hit = (
-                        cached_sum is not None and cached_sum.status == "success" and cached_sum.notion_page_url
-                    )
-                    if summarizer_cache_hit:
-                        cached_summarizer_hits += 1
-                        url = cached_sum.notion_page_url
-                        self.summarizer.inference_price = 0.0
-                    else:
-                        url = self.prepare_paper_summary_and_upload(
-                            paper_id=paper.paper_id,
-                            summarizer_prompt=summarizer_prompt,
-                            category=category,
-                        )
-                        if self.summarizer.inference_price > 0:
-                            summarizer_calls += 1
-                        sum_costs += self.summarizer.inference_price
-
-                    # Record summarizer stage outcome in cache (even if Notion already had the paper),
-                    # but avoid unnecessary Qdrant writes on a pure cache hit.
-                    if not summarizer_cache_hit:
-                        if url:
-                            self.processing_cache.put_summarizer_result(
-                                cache_key=sum_key,
-                                paper_id=paper.paper_id,
-                                category_key=category_key,
-                                model_name=summarizer_model_name,
-                                prompt_hash=summarizer_prompt_hash,
-                                status="success",
-                                notion_page_url=url,
-                            )
-                        else:
-                            self.processing_cache.put_summarizer_result(
-                                cache_key=sum_key,
-                                paper_id=paper.paper_id,
-                                category_key=category_key,
-                                model_name=summarizer_model_name,
-                                prompt_hash=summarizer_prompt_hash,
-                                status="failed",
-                                notion_page_url=None,
-                            )
+                    if self.summarizer.inference_price > 0:
+                        summarizer_calls += 1
+                    sum_costs += self.summarizer.inference_price
 
                     if url:
                         logger.info(f"Successfully processed '{paper.title}': {url}")
@@ -330,10 +312,8 @@ class WorkflowService:
                 logger.error(f"Error processing candidate '{paper.title}': {exp}")
 
         logger.info(
-            "Category stats "
-            f"[{category}]: classifier_cache_hits={cached_classifier_hits}, "
-            f"summarizer_cache_hits={cached_summarizer_hits}, "
-            f"classifier_calls={classifier_calls}, summarizer_calls={summarizer_calls}",
+            f"Category stats [{category}]: classifier_cache_hits={cached_classifier_hits}, "
+            f"classifier_calls={classifier_calls}, summarizer_calls={summarizer_calls}, "
             f"costs for classifier={cls_costs}, summarizer={sum_costs}",
         )
         return cls_costs, sum_costs, processed_count
@@ -376,8 +356,6 @@ class WorkflowService:
                 logger.error(f"Missing 'Page Name' in settings for {page_id}. Skipping.")
                 continue
             if category is not None and page_category is not None and page_category != category:
-                continue
-            if page_category == "AdHoc Research":
                 continue
 
             if not skip_ingestion:
