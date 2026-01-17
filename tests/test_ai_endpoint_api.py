@@ -37,20 +37,13 @@ def test_app() -> tuple[FastAPI, AppContainer]:
 def test_summarize_paper_success(
     test_app: tuple[FastAPI, AppContainer],
     mock_workflow: Mock,
-    mock_extractor: Mock,
 ) -> None:
-    """Return 200 and Notion URL when prompt is resolved."""
+    """Return 200 and Notion URL on successful summarization."""
     app, container = test_app
     mock_workflow.prepare_paper_summary_and_upload.return_value = "https://notion.so/page"
-    mock_extractor.query_database.return_value = ["page_1"]
-    mock_extractor.extract_settings_from_page.return_value = {
-        "Page Name": "Physics",
-        "Summarizer Prompt": "Summarize this paper",
-    }
 
     with override_providers(
         (container.workflow, mock_workflow),
-        (container.notion_settings_extractor, mock_extractor),
     ):
         client = TestClient(app)
         response = client.post(
@@ -62,51 +55,20 @@ def test_summarize_paper_success(
     assert response.json() == "https://notion.so/page"
     mock_workflow.prepare_paper_summary_and_upload.assert_called_once_with(
         paper_id="1234.5678",
-        summarizer_prompt="Summarize this paper",
         category="Physics",
     )
-
-
-def test_summarize_paper_prompt_not_found(
-    test_app: tuple[FastAPI, AppContainer],
-    mock_workflow: Mock,
-    mock_extractor: Mock,
-) -> None:
-    """Return 404 when prompt cannot be resolved."""
-    app, container = test_app
-    mock_extractor.query_database.return_value = ["page_1"]
-    mock_extractor.extract_settings_from_page.return_value = {"Page Name": "Other"}
-
-    with override_providers(
-        (container.workflow, mock_workflow),
-        (container.notion_settings_extractor, mock_extractor),
-    ):
-        client = TestClient(app)
-        response = client.post(
-            "/processor/summarize-paper",
-            json={"paper_id": "1234.5678", "category": "Physics"},
-        )
-
-    assert response.status_code == 404
 
 
 def test_summarize_paper_workflow_failure(
     test_app: tuple[FastAPI, AppContainer],
     mock_workflow: Mock,
-    mock_extractor: Mock,
 ) -> None:
     """Return 500 when workflow returns None."""
     app, container = test_app
     mock_workflow.prepare_paper_summary_and_upload.return_value = None
-    mock_extractor.query_database.return_value = ["page_1"]
-    mock_extractor.extract_settings_from_page.return_value = {
-        "Page Name": "Physics",
-        "Summarizer Prompt": "Summarize this paper",
-    }
 
     with override_providers(
         (container.workflow, mock_workflow),
-        (container.notion_settings_extractor, mock_extractor),
     ):
         client = TestClient(app)
         response = client.post(
@@ -120,14 +82,12 @@ def test_summarize_paper_workflow_failure(
 def test_summarize_paper_invalid_body(
     test_app: tuple[FastAPI, AppContainer],
     mock_workflow: Mock,
-    mock_extractor: Mock,
 ) -> None:
     """Return 422 when request payload is invalid."""
     app, container = test_app
 
     with override_providers(
         (container.workflow, mock_workflow),
-        (container.notion_settings_extractor, mock_extractor),
     ):
         client = TestClient(app)
         response = client.post("/processor/summarize-paper", json={"category": "Physics"})

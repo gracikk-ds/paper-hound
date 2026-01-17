@@ -10,144 +10,59 @@ from fastapi import HTTPException
 from src.routes.ai_endpoint import _normalize_category, _normalize_paper_id, classify_paper, summarize_paper
 from src.utils.schemas import ClassifyRequest, SummarizeRequest
 
-
 # =============================================================================
 # summarize_paper Tests
 # =============================================================================
 
 
-def test_summarize_paper_missing_prompt_raises(mock_workflow: Mock, mock_extractor: Mock) -> None:
-    """Return 404 when prompt lookup yields no summarizer prompt."""
-    request = SummarizeRequest(paper_id="1234.5678", summarizer_prompt=None, category="Physics")
-    mock_extractor.query_database.return_value = ["page_1"]
-    mock_extractor.extract_settings_from_page.return_value = {"Page Name": "Other"}
-
-    with pytest.raises(HTTPException) as exc_info:
-        summarize_paper(request, workflow=mock_workflow, notion_settings_extractor=mock_extractor)
-
-    exc = exc_info.value
-    assert isinstance(exc, HTTPException)
-    assert exc.status_code == 404
-
-
-def test_summarize_paper_uses_provided_prompt_and_normalizes(
-    mock_workflow: Mock,
-    mock_extractor: Mock,
-) -> None:
-    """Use provided prompt and normalized category without lookup."""
-    request = SummarizeRequest(
-        paper_id="1234.5678",
-        summarizer_prompt="  Summarize this  ",
-        category="   ",
-    )
+def test_summarize_paper_success(mock_workflow: Mock) -> None:
+    """Return Notion URL on successful summarization."""
+    request = SummarizeRequest(paper_id="1234.5678", category="Physics")
     mock_workflow.prepare_paper_summary_and_upload.return_value = "https://notion.so/page"
 
-    result = summarize_paper(request, workflow=mock_workflow, notion_settings_extractor=mock_extractor)
+    result = summarize_paper(request, workflow=mock_workflow)
 
     assert result == "https://notion.so/page"
-    mock_extractor.query_database.assert_not_called()
     mock_workflow.prepare_paper_summary_and_upload.assert_called_once_with(
         paper_id="1234.5678",
-        summarizer_prompt="Summarize this",
+        category="Physics",
+    )
+
+
+def test_summarize_paper_normalizes_empty_category(mock_workflow: Mock) -> None:
+    """Empty category is normalized to 'AdHoc Research'."""
+    request = SummarizeRequest(paper_id="1234.5678", category="   ")
+    mock_workflow.prepare_paper_summary_and_upload.return_value = "https://notion.so/page"
+
+    result = summarize_paper(request, workflow=mock_workflow)
+
+    assert result == "https://notion.so/page"
+    mock_workflow.prepare_paper_summary_and_upload.assert_called_once_with(
+        paper_id="1234.5678",
         category="AdHoc Research",
     )
 
 
-def test_summarize_paper_settings_exception_raises(mock_workflow: Mock, mock_extractor: Mock) -> None:
-    """Return 500 when settings lookup fails."""
-    request = SummarizeRequest(paper_id="1234.5678", summarizer_prompt=None, category="Physics")
-    mock_extractor.query_database.side_effect = Exception("boom")
-
-    with pytest.raises(HTTPException) as exc_info:
-        summarize_paper(request, workflow=mock_workflow, notion_settings_extractor=mock_extractor)
-
-    assert exc_info.value.status_code == 500  # type: ignore
-
-
-def test_summarize_paper_workflow_exception_raises(mock_workflow: Mock, mock_extractor: Mock) -> None:
+def test_summarize_paper_workflow_exception_raises(mock_workflow: Mock) -> None:
     """Return 500 when workflow raises an exception."""
-    request = SummarizeRequest(
-        paper_id="1234.5678",
-        summarizer_prompt="Summarize",
-        category="Physics",
-    )
+    request = SummarizeRequest(paper_id="1234.5678", category="Physics")
     mock_workflow.prepare_paper_summary_and_upload.side_effect = Exception("boom")
 
     with pytest.raises(HTTPException) as exc_info:
-        summarize_paper(request, workflow=mock_workflow, notion_settings_extractor=mock_extractor)
+        summarize_paper(request, workflow=mock_workflow)
 
     assert exc_info.value.status_code == 500  # type: ignore
 
 
-def test_summarize_paper_skips_none_settings(mock_workflow: Mock, mock_extractor: Mock) -> None:
-    """Skip pages where extract_settings_from_page returns None."""
-    request = SummarizeRequest(paper_id="1234.5678", summarizer_prompt=None, category="Physics")
-    mock_workflow.prepare_paper_summary_and_upload.return_value = "https://notion.so/page"
-    mock_extractor.query_database.return_value = ["page_1", "page_2"]
-    mock_extractor.extract_settings_from_page.side_effect = [
-        None,  # First page returns None - should be skipped
-        {"Page Name": "Physics", "Summarizer Prompt": "Summarize"},  # Second page matches
-    ]
+def test_summarize_paper_workflow_returns_none_raises(mock_workflow: Mock) -> None:
+    """Return 500 when workflow returns None."""
+    request = SummarizeRequest(paper_id="1234.5678", category="Physics")
+    mock_workflow.prepare_paper_summary_and_upload.return_value = None
 
-    result = summarize_paper(request, workflow=mock_workflow, notion_settings_extractor=mock_extractor)
+    with pytest.raises(HTTPException) as exc_info:
+        summarize_paper(request, workflow=mock_workflow)
 
-    assert result == "https://notion.so/page"
-    assert mock_extractor.extract_settings_from_page.call_count == 2
-    mock_workflow.prepare_paper_summary_and_upload.assert_called_once_with(
-        paper_id="1234.5678",
-        summarizer_prompt="Summarize",
-        category="Physics",
-    )
-
-
-def test_summarize_paper_empty_prompt_triggers_lookup(mock_workflow: Mock, mock_extractor: Mock) -> None:
-    """Empty string prompt after strip becomes None, triggering lookup."""
-    request = SummarizeRequest(
-        paper_id="1234.5678",
-        summarizer_prompt="   ",  # Whitespace-only becomes None after strip
-        category="Physics",
-    )
-    mock_workflow.prepare_paper_summary_and_upload.return_value = "https://notion.so/page"
-    mock_extractor.query_database.return_value = ["page_1"]
-    mock_extractor.extract_settings_from_page.return_value = {
-        "Page Name": "Physics",
-        "Summarizer Prompt": "Looked up prompt",
-    }
-
-    result = summarize_paper(request, workflow=mock_workflow, notion_settings_extractor=mock_extractor)
-
-    assert result == "https://notion.so/page"
-    mock_extractor.query_database.assert_called_once()
-    mock_workflow.prepare_paper_summary_and_upload.assert_called_once_with(
-        paper_id="1234.5678",
-        summarizer_prompt="Looked up prompt",
-        category="Physics",
-    )
-
-
-def test_summarize_paper_iterates_to_find_matching_category(
-    mock_workflow: Mock,
-    mock_extractor: Mock,
-) -> None:
-    """Correctly iterates through pages to find matching category."""
-    request = SummarizeRequest(paper_id="1234.5678", summarizer_prompt=None, category="Biology")
-    mock_workflow.prepare_paper_summary_and_upload.return_value = "https://notion.so/page"
-    mock_extractor.query_database.return_value = ["page_1", "page_2", "page_3"]
-    mock_extractor.extract_settings_from_page.side_effect = [
-        {"Page Name": "Physics", "Summarizer Prompt": "Physics prompt"},
-        {"Page Name": "Chemistry", "Summarizer Prompt": "Chemistry prompt"},
-        {"Page Name": "Biology", "Summarizer Prompt": "Biology prompt"},
-    ]
-
-    result = summarize_paper(request, workflow=mock_workflow, notion_settings_extractor=mock_extractor)
-
-    assert result == "https://notion.so/page"
-    assert mock_extractor.extract_settings_from_page.call_count == 3
-    mock_workflow.prepare_paper_summary_and_upload.assert_called_once_with(
-        paper_id="1234.5678",
-        summarizer_prompt="Biology prompt",
-        category="Biology",
-    )
+    assert exc_info.value.status_code == 500  # type: ignore
 
 
 # =============================================================================
