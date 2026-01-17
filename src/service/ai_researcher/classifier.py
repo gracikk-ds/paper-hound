@@ -8,19 +8,15 @@ from src.service.ai_researcher.gemini_client import GeminiApiClient
 class Classifier:
     """Classifier for research papers."""
 
-    def __init__(self, llm_client: GeminiApiClient, path_to_prompt: str) -> None:
+    def __init__(self, llm_client: GeminiApiClient) -> None:
         """Initialize the classifier.
 
         Args:
             llm_client (GeminiApiClient): The Gemini API client.
-            path_to_prompt (str): The path to the prompt file.
         """
         self.total_price: float = 0.0
         self.inference_price: float = 0.0
         self.llm_client = llm_client
-        with open(path_to_prompt) as file:
-            system_prompt = file.read()
-        self.llm_client.system_prompt = system_prompt
 
     @property
     def system_prompt(self) -> str:

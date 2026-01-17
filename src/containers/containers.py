@@ -100,7 +100,6 @@ class AppContainer(containers.DeclarativeContainer):
     classifier: providers.Singleton[Classifier] = providers.Singleton(
         Classifier,
         llm_client=llm_client,
-        path_to_prompt=config.classifier_path_to_prompt,
     )
 
     summarizer: providers.Singleton[Summarizer] = providers.Singleton(
