@@ -78,7 +78,7 @@ def summarize_paper(
 
     Args:
         request: The summarization request containing:
-            - paper_id (str): The arXiv paper ID (e.g., "2301.07041") or full URL.
+            - paper_id (str): The arXiv paper ID (e.g., "2601.02242") or full URL.
             - summarizer_prompt (str, optional): Custom prompt for the summarizer.
                 If not provided, automatically resolved from Notion settings based on category.
             - category (str): The research category for prompt lookup and Notion organization.
@@ -144,7 +144,7 @@ def classify_paper(
 
     Args:
         request: The classification request containing:
-            - paper_id (str): The arXiv paper ID (e.g., "2301.07041") or full URL.
+            - paper_id (str): The arXiv paper ID (e.g., "2601.02242") or full URL.
             - classifier_system_prompt (str): The system prompt defining classification
                 criteria. The classifier analyzes the paper's title and abstract against
                 this prompt to determine relevance.

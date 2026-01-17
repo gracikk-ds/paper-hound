@@ -107,6 +107,7 @@ class AppContainer(containers.DeclarativeContainer):
         Summarizer,
         llm_client=llm_client,
         path_to_prompt=config.summarizer_path_to_prompt,
+        tmp_storage_dir=config.tmp_storage_dir,
     )
 
     notion_settings_extractor: providers.Singleton[NotionPageExtractor] = providers.Singleton(NotionPageExtractor)

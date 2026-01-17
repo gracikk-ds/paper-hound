@@ -108,7 +108,7 @@ class WorkflowService:
             logger.error(f"Paper {paper_id} not found.")
             return None
 
-        tmp_pdf_path, tmp_images_path = load_pdf_and_images(paper)
+        tmp_pdf_path, tmp_images_path = load_pdf_and_images(paper, self.summarizer.tmp_storage_dir)
         if tmp_pdf_path is None or tmp_images_path is None:
             logger.error(f"Failed to load PDF or images for paper {paper.title}")
             return None

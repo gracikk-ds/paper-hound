@@ -51,7 +51,7 @@ class MarkdownToNotionUploader:
         """Find an existing Notion page URL for a paper by its ArXiv (AlphaXiv) URL/id.
 
         Args:
-            arxiv_url: Either a raw arXiv id (e.g. "2301.07041") or the full URL value
+            arxiv_url: Either a raw arXiv id (e.g. "2601.02242") or the full URL value
                 that is stored in the Notion "Arxiv" URL property.
             category (str | None): The category of the paper to filter by.
 

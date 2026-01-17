@@ -11,16 +11,18 @@ from src.utils.schemas import Paper
 class Summarizer:
     """Summarizer for research papers."""
 
-    def __init__(self, llm_client: GeminiApiClient, path_to_prompt: str) -> None:
+    def __init__(self, llm_client: GeminiApiClient, path_to_prompt: str, tmp_storage_dir: str) -> None:
         """Initialize the summarizer.
 
         Args:
             llm_client (GeminiApiClient): The Gemini API client.
             path_to_prompt (str): The path to the prompt file.
+            tmp_storage_dir (str): The path to the temporary storage directory.
         """
         self.total_price: float = 0.0
         self.inference_price: float = 0.0
         self.llm_client = llm_client
+        self.tmp_storage_dir = tmp_storage_dir
         with open(path_to_prompt, encoding="utf-8") as file:
             self.default_prompt = file.read()
 
@@ -51,7 +53,7 @@ class Summarizer:
             return None, None
 
         file_name = f"{paper.title.replace(' ', '_').lower()}_summary.md"
-        md_path = Path("tmp_storage/tmp_mds") / file_name
+        md_path = Path(self.tmp_storage_dir) / file_name
         md_path.parent.mkdir(parents=True, exist_ok=True)
 
         with open(md_path, mode="w", encoding="utf-8") as file:

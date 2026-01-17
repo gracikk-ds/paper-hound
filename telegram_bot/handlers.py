@@ -122,11 +122,11 @@ def normalize_paper_id(paper_id: str) -> str:
     """Normalize a paper identifier or arXiv URL.
 
     Handles various input formats:
-        - Plain ID: "2301.07041"
+        - Plain ID: "2601.02242"
         - With version: "2301.07041v2"
-        - arXiv abs URL: "https://arxiv.org/abs/2301.07041"
-        - arXiv PDF URL: "https://arxiv.org/pdf/2301.07041.pdf"
-        - alphaxiv URL: "https://alphaxiv.org/abs/2301.07041"
+        - arXiv abs URL: "https://arxiv.org/abs/2601.02242"
+        - arXiv PDF URL: "https://arxiv.org/pdf/2601.02242.pdf"
+        - alphaxiv URL: "https://alphaxiv.org/abs/2601.02242"
 
     Args:
         paper_id: Raw paper ID or URL.
@@ -144,7 +144,7 @@ def normalize_paper_id(paper_id: str) -> str:
             if path.startswith(("abs/", "pdf/")):
                 cleaned = path.split("/", 1)[1].replace(".pdf", "")
 
-    # Strip version suffix (e.g., "2301.07041v2" -> "2301.07041")
+    # Strip version suffix (e.g., "2301.07041v2" -> "2601.02242")
     match = re.match(r"^(\d{4}\.\d{5})(?:v\d+)?$", cleaned)
     return match.group(1) if match else cleaned
 
@@ -162,11 +162,11 @@ def parse_summarize_params(args: list[str]) -> SummarizeParams:
         SummarizeParams with parsed values.
 
     Examples:
-        >>> parse_summarize_params(["2301.07041"])
-        SummarizeParams(paper_id="2301.07041", category="AdHoc Research")
+        >>> parse_summarize_params(["2601.02242"])
+        SummarizeParams(paper_id="2601.02242", category="AdHoc Research")
 
-        >>> parse_summarize_params(["2301.07041", "cat:Image Editing"])
-        SummarizeParams(paper_id="2301.07041", category="Image Editing")
+        >>> parse_summarize_params(["2601.02242", "cat:Image Editing"])
+        SummarizeParams(paper_id="2601.02242", category="Image Editing")
     """
     paper_id = ""
     category = DEFAULT_CATEGORY
@@ -276,9 +276,9 @@ Accepts arXiv URLs or plain IDs
 `/search transformer architectures for vision`
 `/search diffusion models k:10 t:0.5`
 `/search attention from:2025\\-01\\-01 to:2025\\-01\\-15`
-`/paper 2301.07041`
-`/summarize 2301.07041 cat:Image Editing`
-`/summarize https://arxiv.org/abs/2301.07041`
+`/paper 2601.02242`
+`/summarize 2601.02242 cat:Image Editing`
+`/summarize https://arxiv.org/abs/2601.02242`
 """
 
 WELCOME_TEXT = """
@@ -386,7 +386,7 @@ async def handle_paper(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         context: The callback context.
     """
     if not context.args:
-        await update.message.reply_text("Usage: /paper <paper_id>\nExample: /paper 2301.07041")
+        await update.message.reply_text("Usage: /paper <paper_id>\nExample: /paper 2601.02242")
         return
 
     paper_id = context.args[0].strip()
@@ -436,7 +436,7 @@ async def handle_similar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             "  t:N - Threshold 0-1 (default: 0.65)\n"
             "  from:DATE - Start date (YYYY-MM-DD)\n"
             "  to:DATE - End date (YYYY-MM-DD)\n\n"
-            "Example: /similar 2301.07041 k:10",
+            "Example: /similar 2601.02242 k:10",
         )
         return
 
@@ -508,9 +508,9 @@ async def handle_summarize(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             "Options:\n"
             "  cat:Name - Research category (default: AdHoc Research)\n\n"
             "Examples:\n"
-            "  /summarize 2301.07041\n"
-            "  /summarize https://arxiv.org/abs/2301.07041\n"
-            "  /summarize 2301.07041 cat:ML",
+            "  /summarize 2601.02242\n"
+            "  /summarize https://arxiv.org/abs/2601.02242\n"
+            "  /summarize 2601.02242 cat:ML",
         )
         return
 

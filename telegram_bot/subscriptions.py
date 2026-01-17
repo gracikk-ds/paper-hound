@@ -26,7 +26,7 @@ class Subscription:
 class SubscriptionStore:
     """SQLite-based storage for user subscriptions."""
 
-    def __init__(self, db_path: str = "subscriptions.db") -> None:
+    def __init__(self, db_path: str = "storage/subscriptions.db") -> None:
         """Initialize the subscription store.
 
         Args:
@@ -260,7 +260,7 @@ _subscription_store: SubscriptionStore | None = None
 _subscription_store_lock = threading.Lock()
 
 
-def get_subscription_store(db_path: str = "subscriptions.db") -> SubscriptionStore:
+def get_subscription_store(db_path: str = "storage/subscriptions.db") -> SubscriptionStore:
     """Get or create the global subscription store instance.
 
     Thread-safe singleton pattern using double-checked locking.

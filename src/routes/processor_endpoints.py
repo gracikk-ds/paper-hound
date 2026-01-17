@@ -84,7 +84,7 @@ def get_paper_by_id(
     Fetches complete paper metadata from the local vector database.
 
     Args:
-        paper_id: The arXiv paper ID (e.g., "2301.07041").
+        paper_id: The arXiv paper ID (e.g., "2601.02242").
         processor: Injected processor service for paper retrieval.
 
     Returns:
