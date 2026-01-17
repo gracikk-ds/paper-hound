@@ -2,7 +2,7 @@
 
 This module provides FastAPI endpoints for summarizing and classifying arXiv papers
 using AI models. It integrates with Notion for publishing summaries and supports
-custom classification and summarization prompts.
+custom classification prompts.
 
 Endpoints:
     POST /summarize-paper: Generate an AI-powered summary of an arXiv paper and publish it to Notion.
@@ -20,10 +20,8 @@ from src.containers.containers import AppContainer
 from src.routes.routers import processor_router
 from src.service.ai_researcher.classifier import Classifier
 from src.service.arxiv.arxiv_fetcher import ArxivFetcher
-from src.service.notion_db.extract_page_content import NotionPageExtractor
 from src.service.processor import PapersProcessor
 from src.service.workflow import WorkflowService
-from src.settings import settings as api_settings
 from src.utils.schemas import ClassifyRequest, SummarizeRequest
 
 
@@ -68,58 +66,28 @@ def _normalize_paper_id(paper_id: str) -> str:
 def summarize_paper(
     request: SummarizeRequest,
     workflow: WorkflowService = Depends(Provide[AppContainer.workflow]),  # noqa: B008
-    notion_settings_extractor: NotionPageExtractor = Depends(Provide[AppContainer.notion_settings_extractor]),  # noqa: B008
 ) -> str:
     """Generate an AI-powered summary of an arXiv paper and publish it to Notion.
 
-    Fetches the specified arXiv paper, generates a detailed summary using the provided
-    (or auto-resolved) summarizer prompt, and creates a new page in Notion with the
-    formatted summary.
+    Fetches the specified arXiv paper, generates a detailed summary using the default
+    summarizer prompt, and creates a new page in Notion with the formatted summary.
 
     Args:
         request: The summarization request containing:
             - paper_id (str): The arXiv paper ID (e.g., "2601.02242") or full URL.
-            - summarizer_prompt (str, optional): Custom prompt for the summarizer.
-                If not provided, automatically resolved from Notion settings based on category.
-            - category (str): The research category for prompt lookup and Notion organization.
-                Defaults to "AdHoc Research".
+            - category (str): The research category for Notion organization. Defaults to "AdHoc Research".
         workflow: Injected workflow service for summary generation and upload.
-        notion_settings_extractor: Injected extractor for resolving prompts from Notion.
 
     Returns:
         The URL of the newly created Notion page containing the paper summary.
 
     Raises:
-        HTTPException: 404 if no summarizer prompt found for the specified category.
         HTTPException: 500 if summary generation or Notion upload fails.
     """
     category = _normalize_category(request.category)
-    if request.summarizer_prompt is not None:
-        request.summarizer_prompt = request.summarizer_prompt.strip() or None
-
-    if request.summarizer_prompt is None:
-        database_id = api_settings.notion_command_database_id
-        try:
-            for page_id in notion_settings_extractor.query_database(database_id):
-                settings = notion_settings_extractor.extract_settings_from_page(page_id)
-                if settings is None:
-                    continue
-                if settings.get("Page Name", "").strip() == category:
-                    request.summarizer_prompt = settings.get("Summarizer Prompt", None)
-                    break
-        except Exception as exp:
-            logger.error(f"Error resolving summarizer prompt: {exp}")
-            raise HTTPException(status_code=500, detail="Failed to resolve summarizer prompt") from exp
-
-    if request.summarizer_prompt is None:
-        raise HTTPException(status_code=404, detail="Failed to find summarizer prompt for category")
 
     try:
-        result = workflow.prepare_paper_summary_and_upload(
-            paper_id=request.paper_id,
-            summarizer_prompt=request.summarizer_prompt,
-            category=category,
-        )
+        result = workflow.prepare_paper_summary_and_upload(paper_id=request.paper_id, category=category)
     except Exception as exp:
         logger.error(f"Error generating summary for {request.paper_id}: {exp}")
         raise HTTPException(status_code=500, detail="Failed to summarize paper") from exp
