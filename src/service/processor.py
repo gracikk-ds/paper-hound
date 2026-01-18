@@ -183,7 +183,7 @@ class PapersProcessor:
         # Fetch from arXiv
         try:
             paper = arxiv_fetcher.extract_paper_by_name_or_id(paper_id)
-        except Exception as exp:  # noqa: BLE001
+        except Exception as exp:
             logger.error(f"Failed to fetch paper {paper_id} from arXiv: {exp}")
             return None
 

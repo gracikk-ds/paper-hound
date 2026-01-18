@@ -77,7 +77,7 @@ class WorkflowService:
         logger.info(f"Starting ingestion from {start_date_str} to {end_date_str}.")
         try:
             costs = self.processor.insert_papers(start_date, end_date)
-        except Exception as exp:  # noqa: BLE001
+        except Exception as exp:
             logger.error(f"Error inserting papers from {start_date_str} to {end_date_str}: {exp}")
             return 0.0
         else:
@@ -161,7 +161,7 @@ class WorkflowService:
                 )
             return url  # noqa: TRY300
 
-        except Exception as exp:  # noqa: BLE001
+        except Exception as exp:
             logger.error(f"Error processing paper {paper.title}: {exp}")
             # Cache the failed result
             self.processing_cache.put_summarizer_result_by_paper_id(
@@ -216,7 +216,7 @@ class WorkflowService:
                 start_date_str=date_start_str,
                 end_date_str=date_end_str,
             )
-        except Exception as exp:  # noqa: BLE001
+        except Exception as exp:
             logger.error(f"Error searching papers for category {category}: {exp}")
             return 0.0, 0.0, 0
 
@@ -308,7 +308,7 @@ class WorkflowService:
                         processed_count += 1
                 else:
                     logger.info(f"Paper '{paper.title}' classified as NOT relevant.")
-            except Exception as exp:  # noqa: BLE001
+            except Exception as exp:
                 logger.error(f"Error processing candidate '{paper.title}': {exp}")
 
         logger.info(
@@ -392,5 +392,5 @@ class WorkflowService:
             start_date = today - datetime.timedelta(days=self.look_back_days)
             loop = asyncio.get_running_loop()
             await loop.run_in_executor(None, lambda: self.run_workflow(start_date=start_date, end_date=today))
-        except Exception as exp:  # noqa: BLE001
+        except Exception as exp:
             logger.error(f"Scheduled job failed: {exp}")

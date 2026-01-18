@@ -64,6 +64,7 @@ ignore = [
     "PTH120", # replace os.path.dirname with Path.parent
     "PTH110", # one more pathlib related rule,
     "BLE001", # catch exception
+    "COM812",
 
 ]
 task-tags = ["TODO", "FIXME", "XXX", "HACK"]

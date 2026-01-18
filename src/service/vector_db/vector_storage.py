@@ -199,7 +199,7 @@ class QdrantVectorStore:
 
         return existing
 
-    def upsert(
+    def upsert(  # noqa: PLR0913
         self,
         ids: Iterable[str],
         vectors: Iterable[list[float]],
@@ -298,7 +298,7 @@ class QdrantVectorStore:
                 query_filter=q_filter,
                 score_threshold=threshold,
             )
-        except Exception as exp:  # noqa: BLE001
+        except Exception as exp:
             logger.error(f"An error occurred during search: {exp}")
             return []
 
@@ -324,7 +324,7 @@ class QdrantVectorStore:
                 with_payload=True,
                 with_vectors=False,
             )
-        except Exception as exp:  # noqa: BLE001
+        except Exception as exp:
             logger.error(f"An error occurred during retrieval for IDs {ids}: {exp}")
             return []
         if is_single_id:
@@ -354,7 +354,7 @@ class QdrantVectorStore:
                 wait=True,  # Wait for the operation to complete.
             )
             logger.info(f"Successfully deleted points: {point_ids}")
-        except Exception as exp:  # noqa: BLE001
+        except Exception as exp:
             logger.error(f"Failed to delete points with IDs {point_ids}: {exp}")
 
     def count(self) -> int:
@@ -369,7 +369,7 @@ class QdrantVectorStore:
                 collection_name=self.collection,
                 exact=True,  # Get the exact count.
             )
-        except Exception as exp:  # noqa: BLE001
+        except Exception as exp:
             logger.error(f"Failed to count points in collection '{self.collection}': {exp}")
             return 0
         return count_result.count
@@ -396,7 +396,7 @@ class QdrantVectorStore:
                 with_payload=False,
                 with_vectors=True,
             )
-        except Exception as exp:  # noqa: BLE001
+        except Exception as exp:
             logger.error(f"An error occurred while getting vectors for IDs {ids}: {exp}")
             return []
 

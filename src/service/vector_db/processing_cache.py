@@ -136,7 +136,7 @@ class ProcessingCacheStore:
                 with_payload=True,
                 with_vectors=False,
             )
-        except Exception as exp:  # noqa: BLE001
+        except Exception as exp:
             logger.error(f"Failed to retrieve classifier cache records: {exp}")
             return {}
 
@@ -177,7 +177,7 @@ class ProcessingCacheStore:
         point = qmodels.PointStruct(id=point_id, vector=[0.0], payload=payload)
         try:
             self.client.upsert(collection_name=self.collection, points=[point], wait=True)
-        except Exception as exp:  # noqa: BLE001
+        except Exception as exp:
             logger.error(f"Failed to upsert classifier cache record: {exp}")
 
     def get_summarizer_results(self, cache_keys: list[str]) -> dict[str, CachedSummarizerResult]:
@@ -197,7 +197,7 @@ class ProcessingCacheStore:
                 with_payload=True,
                 with_vectors=False,
             )
-        except Exception as exp:  # noqa: BLE001
+        except Exception as exp:
             logger.error(f"Failed to retrieve summarizer cache records: {exp}")
             return {}
 
@@ -245,7 +245,7 @@ class ProcessingCacheStore:
         point = qmodels.PointStruct(id=point_id, vector=[0.0], payload=payload)
         try:
             self.client.upsert(collection_name=self.collection, points=[point], wait=True)
-        except Exception as exp:  # noqa: BLE001
+        except Exception as exp:
             logger.error(f"Failed to upsert summarizer cache record: {exp}")
 
     def get_summarizer_result_by_paper_id(self, paper_id: str) -> CachedSummarizerResult | None:
@@ -289,5 +289,5 @@ class ProcessingCacheStore:
         point = qmodels.PointStruct(id=point_id, vector=[0.0], payload=payload)
         try:
             self.client.upsert(collection_name=self.collection, points=[point], wait=True)
-        except Exception as exp:  # noqa: BLE001
+        except Exception as exp:
             logger.error(f"Failed to upsert summarizer cache record: {exp}")

@@ -37,7 +37,7 @@ def _get_fitz() -> "fitz_module":  # type: ignore
             message="builtin type swigvarlink has no __module__ attribute",
             category=DeprecationWarning,
         )
-        import fitz
+        import fitz  # noqa: PLC0415
 
     return fitz
 
@@ -54,6 +54,7 @@ def filter_images_by_size(blk: dict) -> bool:
     blk_width = blk["bbox"][2] - blk["bbox"][0]
     blk_height = blk["bbox"][3] - blk["bbox"][1]
     return blk_width <= MIN_IMAGE_SIZE and blk_height <= MIN_IMAGE_SIZE
+
 
 def get_block_description(block: dict) -> str:
     """Given a page block, return the text appearing in the block.

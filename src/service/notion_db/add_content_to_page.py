@@ -89,7 +89,7 @@ class MarkdownToNotionUploader:
             # Notion returns the page URL at the top level.
             page_url = results[0].get("url")
             return page_url if isinstance(page_url, str) and page_url else None
-        except Exception as exp:  # noqa: BLE001
+        except Exception as exp:
             logger.error(f"Error checking if paper exists: {exp}")
             return None
 
@@ -135,7 +135,7 @@ class MarkdownToNotionUploader:
                     name = item.get("name")
                     if name:
                         categories.append(name)
-        except Exception as exp:  # noqa: BLE001
+        except Exception as exp:
             logger.error(f"Error finding paper page: {exp}")
             return None
         else:
@@ -189,7 +189,7 @@ class MarkdownToNotionUploader:
             update_response = requests.patch(url, headers=self.headers, json=update_payload, timeout=30)
             update_response.raise_for_status()
             logger.info(f"Added category '{category}' to page {page_id}")
-        except Exception as exp:  # noqa: BLE001
+        except Exception as exp:
             logger.error(f"Error adding category to page {page_id}: {exp}")
             return False
         else:
@@ -378,7 +378,7 @@ class MarkdownToNotionUploader:
             if line.startswith("**Authors:**"):
                 try:
                     authors = eval(line.split("**Authors:**")[1].strip())  # noqa: S307
-                except Exception as exp:  # noqa: BLE001
+                except Exception as exp:
                     logger.warning(f"Error parsing authors: {exp}")
                     authors = []
                 continue
