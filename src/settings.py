@@ -44,6 +44,8 @@ class Settings(BaseSettings):
     s3_bucket: str = Field(..., description="S3 bucket name.")
 
     gemini_model_name: str = Field("gemini-3-flash-preview", description="Gemini model name.")
+    classifier_thinking_level: str = Field("LOW", description="Thinking level for the classifier LLM.")
+    summarizer_thinking_level: str = Field("MEDIUM", description="Thinking level for the summarizer LLM.")
     summarizer_path_to_prompt: str = Field("prompts/summarizer.txt", description="Path to the summarizer prompt.")
     tmp_storage_dir: str = Field("storage/tmp_storage", description="Path to the temporary storage directory.")
     telegram_token: str = Field(..., description="Telegram bot token.")

@@ -92,19 +92,26 @@ class AppContainer(containers.DeclarativeContainer):
         database_id=config.notion_database_id,
     )
     # LLM entities
-    llm_client: providers.Singleton[GeminiApiClient] = providers.Singleton(
+    llm_client_classifier: providers.Singleton[GeminiApiClient] = providers.Singleton(
         GeminiApiClient,
         model_name=config.gemini_model_name,
+        thinking_level=config.classifier_thinking_level,
+    )
+
+    llm_client_summarizer: providers.Singleton[GeminiApiClient] = providers.Singleton(
+        GeminiApiClient,
+        model_name=config.gemini_model_name,
+        thinking_level=config.summarizer_thinking_level,
     )
 
     classifier: providers.Singleton[Classifier] = providers.Singleton(
         Classifier,
-        llm_client=llm_client,
+        llm_client=llm_client_classifier,
     )
 
     summarizer: providers.Singleton[Summarizer] = providers.Singleton(
         Summarizer,
-        llm_client=llm_client,
+        llm_client=llm_client_summarizer,
         path_to_prompt=config.summarizer_path_to_prompt,
         tmp_storage_dir=config.tmp_storage_dir,
     )
