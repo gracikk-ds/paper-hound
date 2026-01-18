@@ -36,7 +36,7 @@ class GeminiApiClient:
         model_name: str = "gemini-3-flash-preview",
         system_prompt: str | None = None,
         temperature: float = 0.0,
-        thinking_level: Literal["LOW", "MEDIUM", "HIGH"] = "LOW",
+        thinking_level: Literal["LOW", "MEDIUM", "HIGH"] = "MEDIUM",
         *,
         verbose: bool = False,
     ) -> None:

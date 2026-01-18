@@ -1,34 +1,43 @@
-Summarize the research paper. The length of the summary should be ~350–500 words.
+Summarize the research paper. The length of the summary should be ~400-600 words.
 Use clear and concise language.
 Follow the structure and conventions below. NO other unrelated text should be added.
 
 ## 1. Motivation of the Research Paper
 
-* What concrete gap are the authors addressing?
-* What breaks because of this gap, and why does it matter?
-* Why do existing methods fail (key bottleneck/limitation)?
-* What does this paper set out to do to close the gap?
-* What would "success" look like for this work?
+Answer each question in 1–3 sentences. Use this format:
+
+- **Gap**: [Concrete problem or missing capability in the field]
+- **Limitation**: [Why existing methods fail — specific bottleneck, not vague statements]
+- **Goal**: [What this paper proposes to solve the gap]
+- **Success criteria**: [Measurable outcome that would validate the work]
 
 ## 2. Key Contributions and Methodology
 
-* Main contributions (phrased as *what is introduced* + *why it matters*). Compare to prior works if relevant.
-* High-level approach: inputs/outputs, core components, and data/compute/training regime if relevant.
+**Contributions**:
+- [What is introduced] - [Why it matters / improvement over prior work]
+
+**Methodology**:
+- **Input/Output**: [What goes in, what comes out - if relevant]
+- **Core mechanism**: [Key algorithmic or architectural idea described in detail - if relevant]
+- **Objective**: [Loss function or training objective — if novel or central to the method]
+- **Training/Compute**: [training regime, compute requirements, etc — if reported]
 
 ## 3. Datasets Used / Presented
 
-* List **all** datasets (training / fine-tuning / evaluation) used in the paper with name, size, domain, and splits.
-* Highlight any newly introduced datasets with additional detail.
+For each dataset, use this format:
+- **[Dataset Name]**: [Size] | [Domain] | [Splits used (train/val/test)]
+
+If a **new dataset is introduced**, add:
+- **[New Dataset Name]** *(introduced)*: [Size] | [Domain] | [Splits]
+  - *Collection*: [Brief description of how data was gathered]
 
 ## 5. Results
 
-* Baselines compared against.
-* Primary metrics and headline results (report deltas in concrete human-readable terms).
-* Efficiency: compute, latency, parameters, memory, or cost (if reported).
+- **Compared against**: [Key baselines/competitors in 1 line]
+- **Summary**: [2–3 sentences: What benchmarks were tested? How does the model perform overall — SOTA, competitive, or niche wins? Any notable strengths or weaknesses?]
+- **Efficiency** *(if reported)*: [Brief comparison vs. baselines — faster/smaller/cheaper or not]
 
 ## 6. Ablations *(If none reported, write "Not performed")*
 
-For each ablation tested, report:
-- **What was changed**: component removed, replaced, or modified
-- **Effect**: metric name, baseline value - ablated value (delta: X%)
-- **Implication**: what this reveals about the component's role
+List key ablations on a separate line using this format:
+- **[Component removed/changed]**: [Impact — helped/hurt/no effect] - [What this reveals]
