@@ -10,14 +10,18 @@ from telegram.ext import ContextTypes
 from telegram_bot.context import bot_context
 from telegram_bot.formatters import (
     _escape_markdown,
-    _escape_url,
     format_paper_detailed,
+    format_paper_short,
     format_search_results,
     format_similar_results,
 )
 from telegram_bot.handlers.handlers_utils import parse_search_params, parse_summarize_params
 from telegram_bot.handlers.schemas import SearchParams
-from telegram_bot.keyboards import build_paper_actions_keyboard, build_paper_list_keyboard
+from telegram_bot.keyboards import (
+    build_paper_actions_keyboard,
+    build_paper_list_keyboard,
+    build_summary_result_keyboard,
+)
 
 
 async def handle_paper(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -234,18 +238,41 @@ async def handle_summarize(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
     try:
         workflow = bot_context.container.workflow()
+        processor = bot_context.container.processor()
+        arxiv_fetcher = bot_context.container.arxiv_fetcher()
         loop = asyncio.get_running_loop()
 
         notion_url = await loop.run_in_executor(
             None,
             lambda: workflow.prepare_paper_summary_and_upload(paper_id=params.paper_id, category=params.category),
         )
+        costs = workflow.summarizer.inference_price
+        costs_str = f"{costs:.3f}".replace(".", "\\.")
 
         if notion_url:
-            await status_msg.edit_text(
-                f"Summary created\\!\n\n[View on Notion]({_escape_url(notion_url)})",
-                parse_mode=ParseMode.MARKDOWN_V2,
+            # Fetch paper info to enrich the summary message
+            paper = await loop.run_in_executor(
+                None,
+                lambda: processor.fetch_and_store_paper(params.paper_id, arxiv_fetcher),
             )
+
+            keyboard = build_summary_result_keyboard(params.paper_id, notion_url)
+
+            if paper:
+                paper_info = format_paper_short(paper)
+                await status_msg.edit_text(
+                    f"\\(づ｡◕‿‿◕｡\\)づ  ✨  *Paper summary created\\!*  ✨\n\n"
+                    f"{paper_info}\n\n"
+                    f"*Summarizer costs*: ${costs_str}",
+                    parse_mode=ParseMode.MARKDOWN_V2,
+                    reply_markup=keyboard,
+                )
+            else:
+                await status_msg.edit_text(
+                    f"\\(づ｡◕‿‿◕｡\\)づ  ✨  *Paper summary created\\!*  ✨\n\n*Summarizer costs*: ${costs_str}",
+                    parse_mode=ParseMode.MARKDOWN_V2,
+                    reply_markup=keyboard,
+                )
         else:
             await status_msg.edit_text("Failed to generate summary. Please try again.")
     except Exception as exp:

@@ -47,11 +47,14 @@ async def handle_insert(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     try:
         processor = bot_context.container.processor()
         loop = asyncio.get_running_loop()
-        await loop.run_in_executor(
+        embedder_costs = await loop.run_in_executor(
             None,
             lambda: processor.insert_papers(start_date, end_date),
         )
-        await status_msg.edit_text(f"Successfully inserted papers from {start_date_str} to {end_date_str}.")
+        await status_msg.edit_text(
+            f"Successfully inserted papers from {start_date_str} to {end_date_str}.\n"
+            f"Embedder costs: ${embedder_costs:.4f}",
+        )
     except Exception as exp:
         logger.error(f"Error inserting papers: {exp}")
         await status_msg.edit_text("An error occurred while inserting papers. Please try again.")

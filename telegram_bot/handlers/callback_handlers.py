@@ -8,10 +8,14 @@ from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 
 from telegram_bot.context import bot_context
-from telegram_bot.formatters import _escape_markdown, _escape_url, format_paper_detailed, format_similar_results
+from telegram_bot.formatters import _escape_markdown, format_paper_detailed, format_paper_short, format_similar_results
 from telegram_bot.handlers.defaults import DEFAULT_CATEGORY
 from telegram_bot.handlers.handlers_utils import normalize_paper_id
-from telegram_bot.keyboards import build_paper_actions_keyboard, build_paper_list_keyboard
+from telegram_bot.keyboards import (
+    build_paper_actions_keyboard,
+    build_paper_list_keyboard,
+    build_summary_result_keyboard,
+)
 from telegram_bot.subscriptions import get_subscription_store
 
 
@@ -66,30 +70,53 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
         category = DEFAULT_CATEGORY
         escaped_id = _escape_markdown(paper_id)
 
-        await query.message.reply_text(
+        status_msg = await query.message.reply_text(
             f"Generating summary for `{escaped_id}`\\.\\.\\. This may take a few minutes\\.",
             parse_mode=ParseMode.MARKDOWN_V2,
         )
 
         try:
             workflow = bot_context.container.workflow()
+            processor = bot_context.container.processor()
+            arxiv_fetcher = bot_context.container.arxiv_fetcher()
             loop = asyncio.get_running_loop()
 
             notion_url = await loop.run_in_executor(
                 None,
                 lambda: workflow.prepare_paper_summary_and_upload(paper_id=paper_id, category=category),
             )
+            costs = workflow.summarizer.inference_price
+            costs_str = f"{costs:.3f}".replace(".", "\\.")
 
             if notion_url:
-                await query.message.reply_text(
-                    f"Summary created\\!\n\n[View on Notion]({_escape_url(notion_url)})",
-                    parse_mode=ParseMode.MARKDOWN_V2,
+                # Fetch paper info to enrich the summary message
+                paper = await loop.run_in_executor(
+                    None,
+                    lambda: processor.fetch_and_store_paper(paper_id, arxiv_fetcher),
                 )
+
+                keyboard = build_summary_result_keyboard(paper_id, notion_url)
+
+                if paper:
+                    paper_info = format_paper_short(paper)
+                    await status_msg.edit_text(
+                        f"\\(づ｡◕‿‿◕｡\\)づ  ✨  *Paper summary created\\!*  ✨\n\n"
+                        f"{paper_info}\n\n"
+                        f"*Summarizer costs*: ${costs_str}",
+                        parse_mode=ParseMode.MARKDOWN_V2,
+                        reply_markup=keyboard,
+                    )
+                else:
+                    await status_msg.edit_text(
+                        f"\\(づ｡◕‿‿◕｡\\)づ  ✨  *Paper summary created\\!*  ✨\n\n*Summarizer costs*: ${costs_str}",
+                        parse_mode=ParseMode.MARKDOWN_V2,
+                        reply_markup=keyboard,
+                    )
             else:
-                await query.message.reply_text("Failed to generate summary.")
+                await status_msg.edit_text("Failed to generate summary.")
         except Exception as exp:
             logger.error(f"Error summarizing paper: {exp}")
-            await query.message.reply_text("An error occurred while generating the summary.")
+            await status_msg.edit_text("An error occurred while generating the summary.")
 
     elif action == "similar":
         paper_id = value

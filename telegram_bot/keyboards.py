@@ -65,6 +65,29 @@ def build_notification_keyboard(paper: Paper, notion_url: str | None = None) -> 
     return InlineKeyboardMarkup(buttons)
 
 
+def build_summary_result_keyboard(paper_id: str, notion_url: str) -> InlineKeyboardMarkup:
+    """Build inline keyboard for summary result.
+
+    Args:
+        paper_id: The paper ID for PDF link and Find Similar button.
+        notion_url: The Notion page URL with the summary.
+
+    Returns:
+        InlineKeyboardMarkup with View on Notion, View PDF, and Find Similar buttons.
+    """
+    pdf_url = f"https://arxiv.org/pdf/{paper_id}.pdf"
+    buttons = [
+        [
+            InlineKeyboardButton("View on Notion", url=notion_url),
+            InlineKeyboardButton("View PDF", url=pdf_url),
+        ],
+        [
+            InlineKeyboardButton("Find Similar", callback_data=f"similar:{paper_id}"),
+        ],
+    ]
+    return InlineKeyboardMarkup(buttons)
+
+
 def build_subscription_keyboard(subscription_id: int) -> InlineKeyboardMarkup:
     """Build inline keyboard for subscription management.
 
