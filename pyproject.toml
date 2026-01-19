@@ -25,6 +25,7 @@ output-format = "grouped"
 respect-gitignore = true
 extend-exclude = [
     "docs/",
+    "src/utils/extract_images.py",
 ]
 show-fixes = true
 

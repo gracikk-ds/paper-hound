@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import warnings
 from io import BytesIO
 from pathlib import Path
@@ -12,7 +13,7 @@ import requests
 from loguru import logger
 from PIL import Image
 
-from src.utils.images_utils import extract_images
+from src.utils.extract_images import extract_images
 
 if TYPE_CHECKING:
     import fitz as fitz_module
@@ -27,6 +28,14 @@ SMALL_JPEG_THRESHOLD: int = 100_000
 
 # Progressive image compression levels: (max_dimension, jpeg_quality)
 IMAGE_COMPRESSION_LEVELS = [(1200, 80), (1000, 70)]
+
+# Pattern to detect References/Bibliography section headers in academic papers
+# Matches: "References", "7. References", "BIBLIOGRAPHY", "  References  ", etc.
+REFERENCES_PATTERN = re.compile(
+    r"^\s*(?:\d+\.?\s*)?"  # Optional section number like "7." or "7"
+    r"(references|bibliography)\s*$",
+    re.IGNORECASE | re.MULTILINE,
+)
 
 
 def _get_fitz() -> fitz_module:  # type: ignore[valid-type]
@@ -177,8 +186,8 @@ def _compress_images_in_pdf(
                         f"{len(base_image['image'])} -> {len(compressed_bytes)} bytes",
                     )
 
-            except Exception as e:  # noqa: BLE001
-                logger.debug(f"Could not compress image {img_index} on page {page_num}: {e}")
+            except Exception as exp:
+                logger.debug(f"Could not compress image {img_index} on page {page_num}: {exp}")
 
     doc.save(output_path, garbage=4, deflate=True, clean=True)
     doc.close()
@@ -226,8 +235,8 @@ def _try_truncate_pdf(
             temp_path = pdf_path.with_suffix(".temp.pdf")
             _compress_images_in_pdf(compressed_path, temp_path, 600, 50)
             temp_path.replace(compressed_path)
-        except Exception as e:  # noqa: BLE001
-            logger.debug(f"Image compression during truncation failed: {e}")
+        except Exception as exp:
+            logger.debug(f"Image compression during truncation failed: {exp}")
 
         test_size = compressed_path.stat().st_size
         if test_size <= max_size:
@@ -256,8 +265,8 @@ def _try_truncate_pdf(
         temp_path = pdf_path.with_suffix(".temp.pdf")
         _compress_images_in_pdf(compressed_path, temp_path, 600, 50)
         temp_path.replace(compressed_path)
-    except Exception as e:  # noqa: BLE001
-        logger.debug(f"Final image compression failed: {e}")
+    except Exception as exp:
+        logger.debug(f"Final image compression failed: {exp}")
 
     compressed_path.replace(pdf_path)
     final_size = pdf_path.stat().st_size
@@ -328,20 +337,83 @@ def compress_pdf(pdf_path: Path, max_size: int = MAX_PDF_SIZE_BYTES) -> bool:
                     return True
 
                 compressed_path.unlink(missing_ok=True)
-            except Exception as e:  # noqa: BLE001
-                logger.debug(f"Image compression failed at level ({max_dim}, {quality}): {e}")
+            except Exception as exp:
+                logger.debug(f"Image compression failed at level ({max_dim}, {quality}): {exp}")
                 compressed_path.unlink(missing_ok=True)
 
         # Strategy 3: Page truncation as last resort
         logger.info("Image compression insufficient, truncating pages from the end...")
         return _try_truncate_pdf(pdf_path, compressed_path, max_size)
 
-    except Exception:  # noqa: BLE001
-        logger.exception("Error compressing PDF")
+    except Exception as exp:
+        logger.exception(f"Error compressing PDF: {exp}")
         return False
     finally:
         compressed_path.unlink(missing_ok=True)
         pdf_path.with_suffix(".temp.pdf").unlink(missing_ok=True)
+
+
+def remove_references_section(pdf_path: Path) -> bool:
+    """Remove the References section and all content after it from a PDF.
+
+    Searches from the end of the document backwards to find the last occurrence
+    of a References/Bibliography section header, then removes all pages from
+    that page onwards.
+
+    Args:
+        pdf_path: Path to the PDF file to modify in place.
+
+    Returns:
+        True if references were found and removed, False otherwise.
+    """
+    fitz = _get_fitz()
+
+    try:
+        doc = fitz.open(pdf_path)
+        total_pages = len(doc)
+
+        if total_pages <= 1:
+            doc.close()
+            return False
+
+        # Search from the end backwards to find the References section
+        references_page: int | None = None
+
+        for page_num in range(total_pages - 1, -1, -1):
+            page = doc[page_num]
+            text = page.get_text()
+
+            if REFERENCES_PATTERN.search(text):
+                references_page = page_num
+                break
+
+        if references_page is None:
+            doc.close()
+            return False
+
+        # Don't remove if References is on the first page (likely not a real references section)
+        if references_page == 0:
+            doc.close()
+            return False
+
+        # Delete all pages from the references page to the end
+        pages_to_remove = total_pages - references_page
+        doc.delete_pages(from_page=references_page, to_page=total_pages - 1)
+
+        # Save the modified PDF
+        doc.save(pdf_path, garbage=4, deflate=True, clean=True)
+        doc.close()
+
+        logger.info(
+            f"Removed {pages_to_remove} pages (References section) from PDF, keeping {references_page} pages",
+        )
+
+    except Exception as exp:
+        logger.warning(f"Failed to remove references section from PDF: {exp}")
+        return False
+
+    else:
+        return True
 
 
 def download_pdf(pdf_url: str, pdf_path: Path, max_size: int = MAX_PDF_SIZE_BYTES) -> None:
@@ -392,7 +464,10 @@ def load_pdf_and_images(paper: Paper, tmp_storage_dir: str) -> tuple[Path | None
     try:
         download_pdf(paper.pdf_url, tmp_pdf_path)
         extract_images(str(tmp_pdf_path), str(tmp_images_path))
-    except Exception as exp:  # noqa: BLE001
+        # Remove references section to reduce token usage when sending to LLM
+        if remove_references_section(tmp_pdf_path):
+            logger.info(f"Removed references section from {paper.title}")
+    except Exception as exp:
         logger.error(f"Error loading PDF and images for paper: {paper.title}: {exp}")
         return None, None
     return tmp_pdf_path, tmp_images_path
