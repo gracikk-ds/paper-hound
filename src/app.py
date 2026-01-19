@@ -17,7 +17,12 @@ from src.handlers.exception_handlers import handle_unexpected_exception
 from src.metrics.asgi_metrics import metrics_endpoint
 from src.middleware.metrics import PrometheusMiddleware
 from src.middleware.process_time import ProcessTimeMiddleware
-from src.routes import ai_endpoint, health_endpoints, processor_endpoints, workflow_endpoints  # noqa: F401
+from src.routes import (
+    ai_endpoint,
+    health_endpoints,  # noqa: F401
+    processor_endpoints,
+    workflow_endpoints,
+)
 from src.routes.routers import processor_router, status_check_bp, workflow_router
 from src.service.processor import PapersProcessor
 from src.service.vector_db.processing_cache import ProcessingCacheStore
@@ -53,7 +58,7 @@ async def run_scheduled_workflow_with_notifications(
             look_back_days=workflow_service.look_back_days,
         )
         logger.info(f"Sent {notifications_sent} subscription notifications after workflow.")
-    except Exception:  # noqa: BLE001
+    except Exception:
         logger.exception("Error sending subscription notifications")
 
 
