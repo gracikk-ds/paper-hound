@@ -24,8 +24,6 @@ from src.routes import (
     workflow_endpoints,
 )
 from src.routes.routers import processor_router, status_check_bp, workflow_router
-from src.service.processor import PapersProcessor
-from src.service.vector_db.processing_cache import ProcessingCacheStore
 from src.service.workflow import WorkflowService
 from src.settings import settings
 from telegram_bot.bot import create_bot_application, run_bot, stop_bot
@@ -35,27 +33,21 @@ from telegram_bot.notifications import run_subscription_notifications
 async def run_scheduled_workflow_with_notifications(
     workflow_service: WorkflowService,
     bot_token: str,
-    processor: PapersProcessor,
-    processing_cache: ProcessingCacheStore,
 ) -> None:
     """Run the scheduled workflow and then send notifications.
 
     Args:
         workflow_service: The workflow service instance.
         bot_token: Telegram bot token.
-        processor: Papers processor.
-        processing_cache: Processing cache.
     """
-    # Run the workflow first
-    await workflow_service.run_scheduled_job()
+    # Run the workflow and get processed papers by category
+    processed_by_category = await workflow_service.run_scheduled_job()
 
-    # Then send notifications to subscribers
+    # Then send notifications to subscribers about processed papers
     try:
         notifications_sent = await run_subscription_notifications(
             bot_token=bot_token,
-            processor=processor,
-            processing_cache=processing_cache,
-            look_back_days=workflow_service.look_back_days,
+            processed_by_category=processed_by_category,
         )
         logger.info(f"Sent {notifications_sent} subscription notifications after workflow.")
     except Exception:
@@ -83,8 +75,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Start the scheduler
     scheduler = AsyncIOScheduler()
     workflow_service = container.workflow()
-    processor = container.processor()
-    processing_cache = container.processing_cache()
 
     # Schedule the daily job at 06:00 with notifications
     scheduler.add_job(
@@ -92,8 +82,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         "cron",
         hour=6,
         minute=0,
-        args=[workflow_service, settings.telegram_token, processor, processing_cache],
+        args=[workflow_service, settings.telegram_token],
     )
+    await run_scheduled_workflow_with_notifications(workflow_service, settings.telegram_token)
     scheduler.start()
 
     yield

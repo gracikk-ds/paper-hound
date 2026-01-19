@@ -400,9 +400,13 @@ def remove_references_section(pdf_path: Path) -> bool:
         pages_to_remove = total_pages - references_page
         doc.delete_pages(from_page=references_page, to_page=total_pages - 1)
 
-        # Save the modified PDF
-        doc.save(pdf_path, garbage=4, deflate=True, clean=True)
+        # Save to a temporary file first (PyMuPDF doesn't allow saving to the same open file)
+        temp_path = pdf_path.with_suffix(".tmp.pdf")
+        doc.save(temp_path, garbage=4, deflate=True)
         doc.close()
+
+        # Replace the original file with the modified one
+        temp_path.replace(pdf_path)
 
         logger.info(
             f"Removed {pages_to_remove} pages (References section) from PDF, keeping {references_page} pages",
@@ -410,6 +414,10 @@ def remove_references_section(pdf_path: Path) -> bool:
 
     except Exception as exp:
         logger.warning(f"Failed to remove references section from PDF: {exp}")
+        # Clean up temp file if it was created
+        temp_path = pdf_path.with_suffix(".tmp.pdf")
+        if temp_path.exists():
+            temp_path.unlink()
         return False
 
     else:

@@ -927,7 +927,7 @@ class FigureExtractor:
 
             image_name = f"figure_{figure_id}.jpg"
             image_path = os.path.join(self.output_folder, image_name)
-            image.save(image_path, "JPEG", quality=90)
+            image.save(image_path, "JPEG", quality=100)
 
             desc_path = os.path.join(self.output_folder, f"figure_{figure_id}.txt")
             with open(desc_path, "w", encoding="utf-8") as desc_file:

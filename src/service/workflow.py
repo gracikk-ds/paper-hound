@@ -20,12 +20,13 @@ from src.service.processor import PapersProcessor
 from src.service.vector_db.processing_cache import ProcessingCacheStore, make_cache_key, stable_hash
 from src.utils.images_utils import add_images_to_md
 from src.utils.load_utils import load_pdf_and_images
+from src.utils.schemas import Paper
 
 
 class WorkflowService:
     """Service for managing paper processing workflows."""
 
-    look_back_days: int = 3
+    look_back_days: int = 4
 
     def __init__(  # noqa: PLR0913
         self,
@@ -192,7 +193,7 @@ class WorkflowService:
         *,
         category_key: str | None = None,
         use_classifier: bool = True,
-    ) -> tuple[float, float, int]:
+    ) -> tuple[float, float, int, list[tuple[Paper, str]]]:
         """Process a specific category.
 
         Args:
@@ -205,7 +206,8 @@ class WorkflowService:
             use_classifier (bool): Whether to use classifier.
 
         Returns:
-            tuple[float, float, int]: Classifier costs, summarizer costs, processed count.
+            tuple[float, float, int, list[tuple[Paper, str]]]: Classifier costs, summarizer costs,
+                processed count, and list of (paper, notion_url) tuples.
         """
         query = settings["Query Prompt"]
         try:
@@ -218,12 +220,13 @@ class WorkflowService:
             )
         except Exception as exp:
             logger.error(f"Error searching papers for category {category}: {exp}")
-            return 0.0, 0.0, 0
+            return 0.0, 0.0, 0, []
 
         logger.info(f"Found {len(candidates)} candidates for '{query}' query in {category} category.")
         processed_count = 0
         cls_costs = 0.0
         sum_costs = 0.0
+        processed_papers: list[tuple[Paper, str]] = []
 
         category_key = category_key or category
         classifier_prompt = settings.get("Classifier Prompt") or None
@@ -305,6 +308,7 @@ class WorkflowService:
 
                     if url:
                         logger.info(f"Successfully processed '{paper.title}': {url}")
+                        processed_papers.append((paper, url))
                         processed_count += 1
                 else:
                     logger.info(f"Paper '{paper.title}' classified as NOT relevant.")
@@ -316,7 +320,7 @@ class WorkflowService:
             f"classifier_calls={classifier_calls}, summarizer_calls={summarizer_calls}, "
             f"costs for classifier={cls_costs}, summarizer={sum_costs}",
         )
-        return cls_costs, sum_costs, processed_count
+        return cls_costs, sum_costs, processed_count, processed_papers
 
     def run_workflow(  # noqa: PLR0913
         self,
@@ -327,7 +331,7 @@ class WorkflowService:
         use_classifier: bool = True,
         top_k: int = 10,
         category: str | None = None,
-    ) -> None:
+    ) -> dict[str, list[tuple[Paper, str]]]:
         """Run the workflow for a date range.
 
         Args:
@@ -337,6 +341,10 @@ class WorkflowService:
             use_classifier (bool): Whether to use the classifier.
             top_k (int): Number of papers to retrieve per category.
             category (str | None): Category to process.
+
+        Returns:
+            dict[str, list[tuple[Paper, str]]]: Mapping of category name to list of
+                (paper, notion_url) tuples for successfully processed papers.
         """
         embedder_costs = 0.0
         date_start_str = start_date.strftime("%Y-%m-%d")
@@ -345,6 +353,7 @@ class WorkflowService:
         total_cls_costs = 0.0
         total_sum_costs = 0.0
         total_processed = 0
+        processed_by_category: dict[str, list[tuple[Paper, str]]] = {}
 
         for page_id in self.notion_settings_extractor.query_database(self.notion_command_database_id):
             page_settings = self.notion_settings_extractor.extract_settings_from_page(page_id)
@@ -363,7 +372,7 @@ class WorkflowService:
                 skip_ingestion = True
 
             try:
-                cls_costs, sum_costs, count = self._process_category(
+                cls_costs, sum_costs, count, processed_papers = self._process_category(
                     category=page_category,
                     settings=page_settings,
                     date_start_str=date_start_str,
@@ -380,17 +389,30 @@ class WorkflowService:
             total_sum_costs += sum_costs
             total_processed += count
 
+            if processed_papers:
+                processed_by_category[page_category] = processed_papers
+
         logger.info(f"Workflow costs: {total_cls_costs + total_sum_costs + embedder_costs}")
         logger.info(f"Workflow completed. Processed {total_processed} papers.")
+        return processed_by_category
 
-    async def run_scheduled_job(self) -> None:
-        """Wrapper for the scheduled job."""
+    async def run_scheduled_job(self) -> dict[str, list[tuple[Paper, str]]]:
+        """Run the scheduled workflow and return processed papers by category.
+
+        Returns:
+            dict[str, list[tuple[Paper, str]]]: Mapping of category name to list of
+                (paper, notion_url) tuples for successfully processed papers.
+        """
         logger.info("Running scheduled daily paper workflow.")
         try:
-            # Default behavior: run for today, looking back 4 days
+            # Default behavior: run for today, looking back look_back_days
             today = datetime.date.today()  # noqa: DTZ011
             start_date = today - datetime.timedelta(days=self.look_back_days)
             loop = asyncio.get_running_loop()
-            await loop.run_in_executor(None, lambda: self.run_workflow(start_date=start_date, end_date=today))
+            return await loop.run_in_executor(
+                None,
+                lambda: self.run_workflow(start_date=start_date, end_date=today),
+            )
         except Exception as exp:
             logger.error(f"Scheduled job failed: {exp}")
+            return {}
