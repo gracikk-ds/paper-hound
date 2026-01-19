@@ -93,7 +93,7 @@ class NotificationService:
             filtered_papers_with_urls = []
             for paper, notion_url in papers_with_urls:
                 try:
-                    paper_date = datetime.fromisoformat(paper.published_date)
+                    paper_date = datetime.fromisoformat(paper.published_date.split("T")[0])
                     if paper_date > subscription.last_notified_at:
                         filtered_papers_with_urls.append((paper, notion_url))
                 except (ValueError, TypeError):
