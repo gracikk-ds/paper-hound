@@ -3,8 +3,8 @@
 import asyncio
 
 from loguru import logger
-from telegram import Update
-from telegram.constants import ParseMode
+from telegram import ChatMember, Update
+from telegram.constants import ChatType, ParseMode
 from telegram.ext import ContextTypes
 
 from telegram_bot.context import bot_context
@@ -19,7 +19,35 @@ from telegram_bot.keyboards import (
 from telegram_bot.subscriptions import get_subscription_store
 
 
-async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:  # noqa: PLR0912,PLR0915
+async def _is_callback_user_group_admin(update: Update) -> bool:
+    """Check if the callback query user is an admin of the group chat.
+
+    Args:
+        update: The update object.
+
+    Returns:
+        True if user is admin/creator, False otherwise.
+    """
+    query = update.callback_query
+    chat = query.message.chat
+    user = update.effective_user
+
+    if chat.type == ChatType.PRIVATE:
+        return False
+
+    try:
+        member = await chat.get_member(user.id)
+    except Exception as exp:
+        logger.error(f"Error checking admin status: {exp}")
+        return False
+    else:
+        return member.status in (ChatMember.ADMINISTRATOR, ChatMember.OWNER)
+
+
+async def handle_callback_query(  # noqa: PLR0912,PLR0915,PLR0911
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+) -> None:
     """Handle inline button callbacks.
 
     Args:
@@ -209,5 +237,69 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
 
         if store.deactivate_subscription(subscription_id, user_id):
             await query.message.edit_text("Subscription deactivated.")
+        else:
+            await query.message.reply_text("Subscription not found or already inactive.")
+
+    elif action == "gsub":
+        # Subscribe group to a topic from inline keyboard
+        topic = value
+        user_id = update.effective_user.id
+        chat_id = query.message.chat_id
+
+        # Check if user is admin
+        if not await _is_callback_user_group_admin(update):
+            await query.answer("Only group administrators can manage group subscriptions.", show_alert=True)
+            return
+
+        # Validate topic is allowed (not AdHoc Research)
+        if topic == "AdHoc Research":
+            await query.message.reply_text("This topic is not available for subscription.")
+            return
+
+        try:
+            store = get_subscription_store()
+
+            # Check if already subscribed
+            group_subscriptions = store.get_chat_subscriptions(chat_id)
+            subscribed_topics = {sub.query for sub in group_subscriptions}
+            if topic in subscribed_topics:
+                await query.message.edit_text(
+                    f"This group is already subscribed to *{_escape_markdown(topic)}*\\.",
+                    parse_mode=ParseMode.MARKDOWN_V2,
+                )
+                return
+
+            store.add_subscription(user_id, chat_id, topic, is_group=True)
+            count = store.count_chat_subscriptions(chat_id)
+
+            await query.message.edit_text(
+                f"Group subscribed to: *{_escape_markdown(topic)}*\n\n"
+                f"Everyone in this group will receive updates when new papers match this topic\\.\n"
+                f"Current group subscriptions: {count}",
+                parse_mode=ParseMode.MARKDOWN_V2,
+            )
+        except Exception as exp:
+            logger.error(f"Error subscribing group via callback: {exp}")
+            await query.message.reply_text("An error occurred. Please try again.")
+
+    elif action == "gunsub":
+        # Unsubscribe group from a topic
+        try:
+            subscription_id = int(value)
+        except ValueError:
+            await query.message.reply_text("Invalid subscription ID.")
+            return
+
+        chat_id = query.message.chat_id
+
+        # Check if user is admin
+        if not await _is_callback_user_group_admin(update):
+            await query.answer("Only group administrators can manage group subscriptions.", show_alert=True)
+            return
+
+        store = get_subscription_store()
+
+        if store.deactivate_chat_subscription(subscription_id, chat_id):
+            await query.message.edit_text("Group subscription deactivated.")
         else:
             await query.message.reply_text("Subscription not found or already inactive.")

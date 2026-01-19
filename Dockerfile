@@ -29,7 +29,7 @@ COPY scripts/ scripts/
 COPY telegram_bot/ telegram_bot/
 
 # Expose port
-EXPOSE 8000
+EXPOSE 8001
 
 # Command to run the application
-CMD ["gunicorn", "src.app:create_app()", "-k", "uvicorn.workers.UvicornWorker", "-w", "1", "-t", "20000", "--bind", "0.0.0.0:8000"]
+CMD ["gunicorn", "src.app:create_app()", "-k", "uvicorn.workers.UvicornWorker", "-w", "1", "-t", "20000", "--bind", "0.0.0.0:8001"]

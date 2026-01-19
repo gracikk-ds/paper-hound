@@ -11,7 +11,7 @@ from loguru import logger
 
 @dataclass
 class Subscription:
-    """Represents a user subscription."""
+    """Represents a user or group subscription."""
 
     id: int
     user_id: int
@@ -21,6 +21,7 @@ class Subscription:
     created_at: datetime
     last_notified_at: datetime | None
     is_active: bool
+    is_group: bool = False
 
 
 class SubscriptionStore:
@@ -47,7 +48,8 @@ class SubscriptionStore:
                     threshold REAL DEFAULT 0.65,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     last_notified_at TIMESTAMP,
-                    is_active BOOLEAN DEFAULT TRUE
+                    is_active BOOLEAN DEFAULT TRUE,
+                    is_group BOOLEAN DEFAULT FALSE
                 )
             """)
             conn.execute("""
@@ -58,6 +60,16 @@ class SubscriptionStore:
                 CREATE INDEX IF NOT EXISTS idx_subscriptions_is_active
                 ON subscriptions(is_active)
             """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_subscriptions_chat_id
+                ON subscriptions(chat_id)
+            """)
+            # Migration: add is_group column if it doesn't exist (for existing databases)
+            cursor = conn.execute("PRAGMA table_info(subscriptions)")
+            columns = [row[1] for row in cursor.fetchall()]
+            if "is_group" not in columns:
+                conn.execute("ALTER TABLE subscriptions ADD COLUMN is_group BOOLEAN DEFAULT FALSE")
+                logger.info("Migrated subscriptions table: added is_group column")
             conn.commit()
         logger.info(f"Subscription database initialized at {self.db_path}")
 
@@ -67,14 +79,17 @@ class SubscriptionStore:
         chat_id: int,
         query: str,
         threshold: float = 0.65,
+        *,
+        is_group: bool = False,
     ) -> Subscription:
         """Add a new subscription.
 
         Args:
-            user_id: Telegram user ID.
+            user_id: Telegram user ID (creator of subscription).
             chat_id: Telegram chat ID for notifications.
             query: Search query for the subscription.
             threshold: Similarity threshold for matches.
+            is_group: Whether this is a group subscription.
 
         Returns:
             The created Subscription.
@@ -82,10 +97,10 @@ class SubscriptionStore:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.execute(
                 """
-                INSERT INTO subscriptions (user_id, chat_id, query, threshold)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO subscriptions (user_id, chat_id, query, threshold, is_group)
+                VALUES (?, ?, ?, ?, ?)
                 """,
-                (user_id, chat_id, query, threshold),
+                (user_id, chat_id, query, threshold, is_group),
             )
             conn.commit()
             subscription_id = cursor.lastrowid
@@ -99,23 +114,24 @@ class SubscriptionStore:
             created_at=datetime.now(),  # noqa: DTZ005
             last_notified_at=None,
             is_active=True,
+            is_group=is_group,
         )
 
     def get_user_subscriptions(self, user_id: int) -> list[Subscription]:
-        """Get all active subscriptions for a user.
+        """Get all active personal (non-group) subscriptions for a user.
 
         Args:
             user_id: Telegram user ID.
 
         Returns:
-            List of active subscriptions.
+            List of active personal subscriptions.
         """
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.execute(
                 """
                 SELECT * FROM subscriptions
-                WHERE user_id = ? AND is_active = TRUE
+                WHERE user_id = ? AND is_active = TRUE AND is_group = FALSE
                 ORDER BY created_at DESC
                 """,
                 (user_id,),
@@ -163,7 +179,7 @@ class SubscriptionStore:
         return self._row_to_subscription(row) if row else None
 
     def deactivate_subscription(self, subscription_id: int, user_id: int) -> bool:
-        """Deactivate a subscription.
+        """Deactivate a personal (non-group) subscription.
 
         Args:
             subscription_id: The subscription ID to deactivate.
@@ -177,7 +193,7 @@ class SubscriptionStore:
                 """
                 UPDATE subscriptions
                 SET is_active = FALSE
-                WHERE id = ? AND user_id = ? AND is_active = TRUE
+                WHERE id = ? AND user_id = ? AND is_active = TRUE AND is_group = FALSE
                 """,
                 (subscription_id, user_id),
             )
@@ -220,9 +236,73 @@ class SubscriptionStore:
             cursor = conn.execute(
                 """
                 SELECT COUNT(*) FROM subscriptions
-                WHERE user_id = ? AND is_active = TRUE
+                WHERE user_id = ? AND is_active = TRUE AND is_group = FALSE
                 """,
                 (user_id,),
+            )
+            return cursor.fetchone()[0]
+
+    def get_chat_subscriptions(self, chat_id: int) -> list[Subscription]:
+        """Get all active group subscriptions for a chat.
+
+        Args:
+            chat_id: Telegram chat ID.
+
+        Returns:
+            List of active group subscriptions for the chat.
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute(
+                """
+                SELECT * FROM subscriptions
+                WHERE chat_id = ? AND is_active = TRUE AND is_group = TRUE
+                ORDER BY created_at DESC
+                """,
+                (chat_id,),
+            )
+            rows = cursor.fetchall()
+
+        return [self._row_to_subscription(row) for row in rows]
+
+    def deactivate_chat_subscription(self, subscription_id: int, chat_id: int) -> bool:
+        """Deactivate a group subscription.
+
+        Args:
+            subscription_id: The subscription ID to deactivate.
+            chat_id: The chat ID (for verification).
+
+        Returns:
+            True if deactivated, False if not found or not belonging to this chat.
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute(
+                """
+                UPDATE subscriptions
+                SET is_active = FALSE
+                WHERE id = ? AND chat_id = ? AND is_group = TRUE AND is_active = TRUE
+                """,
+                (subscription_id, chat_id),
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def count_chat_subscriptions(self, chat_id: int) -> int:
+        """Count active group subscriptions for a chat.
+
+        Args:
+            chat_id: Telegram chat ID.
+
+        Returns:
+            Number of active group subscriptions.
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute(
+                """
+                SELECT COUNT(*) FROM subscriptions
+                WHERE chat_id = ? AND is_active = TRUE AND is_group = TRUE
+                """,
+                (chat_id,),
             )
             return cursor.fetchone()[0]
 
@@ -252,6 +332,7 @@ class SubscriptionStore:
             created_at=created_at,
             last_notified_at=last_notified,
             is_active=bool(row["is_active"]),
+            is_group=bool(row["is_group"]) if "is_group" in row else False,
         )
 
 

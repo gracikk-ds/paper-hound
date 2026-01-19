@@ -7,7 +7,7 @@ if [ -f .env ]; then
 fi
 
 # Configuration
-URL="http://0.0.0.0:8000"
+URL="http://0.0.0.0:8001"
 START_DATE="2026-01-08"
 END_DATE="2026-01-15"
 SKIP_INGESTION=""

@@ -8,7 +8,7 @@ from requests.exceptions import RequestException
 
 
 @click.command()
-@click.option("--url", default="http://0.0.0.0:8000", help="Base URL of the API")
+@click.option("--url", default="http://0.0.0.0:8001", help="Base URL of the API")
 @click.option("--start-date", help="Start date for workflow (YYYY-MM-DD)")
 @click.option("--end-date", help="End date for workflow (YYYY-MM-DD)")
 @click.option("--skip-ingestion", is_flag=True, help="Skip ingestion of new papers")

@@ -4,6 +4,9 @@ from telegram_bot.handlers.callback_handlers import handle_callback_query
 from telegram_bot.handlers.main_handlers import handle_paper, handle_search, handle_similar, handle_summarize
 from telegram_bot.handlers.storage_handlers import handle_insert, handle_stats
 from telegram_bot.handlers.subscription_handlers import (
+    handle_group_subscribe,
+    handle_group_subscriptions,
+    handle_group_unsubscribe,
     handle_subscribe,
     handle_subscriptions,
     handle_topics,
@@ -13,6 +16,9 @@ from telegram_bot.handlers.welcome_handlers import handle_help, handle_start
 
 __all__ = [
     "handle_callback_query",
+    "handle_group_subscribe",
+    "handle_group_subscriptions",
+    "handle_group_unsubscribe",
     "handle_help",
     "handle_insert",
     "handle_paper",

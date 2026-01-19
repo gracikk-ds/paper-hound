@@ -23,11 +23,16 @@ Accepts arXiv URLs or plain IDs
 *Summarize Options:*
 • `cat:Name` \\- Research category \\(default: AdHoc Research\\)
 
-*Subscription Commands:*
+*Personal Subscription Commands:*
 /topics \\- Show all available topics
 /subscribe \\- Subscribe to a topic \\(shows unsubscribed topics\\)
 /unsubscribe \\- Remove a subscription \\(shows your subscriptions\\)
 /subscriptions \\- List your active subscriptions
+
+*Group Subscription Commands \\(admins only\\):*
+/groupsubscribe \\- Subscribe the group to a topic
+/groupunsubscribe \\- Remove a group subscription
+/groupsubscriptions \\- List group's active subscriptions
 
 *Other Commands:*
 /stats \\- Database statistics

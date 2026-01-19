@@ -19,5 +19,5 @@ gunicorn "src.app:create_app()" \
     -k uvicorn.workers.UvicornWorker \
     -w 1 \
     -t 20000 \
-    --bind 0.0.0.0:8000 \
+    --bind 0.0.0.0:8001 \
     --reload

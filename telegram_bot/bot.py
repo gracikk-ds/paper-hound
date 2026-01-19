@@ -11,8 +11,12 @@ from telegram_bot.context import bot_context
 
 if TYPE_CHECKING:
     from src.containers.containers import AppContainer
+
 from telegram_bot.handlers import (
     handle_callback_query,
+    handle_group_subscribe,
+    handle_group_subscriptions,
+    handle_group_unsubscribe,
     handle_help,
     handle_insert,
     handle_paper,
@@ -77,6 +81,11 @@ def create_bot_application(
     application.add_handler(CommandHandler("unsubscribe", handle_unsubscribe))
     application.add_handler(CommandHandler("subscriptions", handle_subscriptions))
     application.add_handler(CommandHandler("stats", handle_stats))
+
+    # Group subscription handlers
+    application.add_handler(CommandHandler("groupsubscribe", handle_group_subscribe))
+    application.add_handler(CommandHandler("groupunsubscribe", handle_group_unsubscribe))
+    application.add_handler(CommandHandler("groupsubscriptions", handle_group_subscriptions))
 
     # Register callback query handler for inline buttons
     application.add_handler(CallbackQueryHandler(handle_callback_query))
