@@ -84,7 +84,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         minute=0,
         args=[workflow_service, settings.telegram_token],
     )
-    await run_scheduled_workflow_with_notifications(workflow_service, settings.telegram_token)
     scheduler.start()
 
     yield
