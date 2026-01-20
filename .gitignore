@@ -9,6 +9,7 @@ __pycache__/
 *.so
 TODO
 credentials/
+CLAUDE.md
 
 # Temporary storage
 storage/
