@@ -1,5 +1,4 @@
-Summarize the research paper. The length of the summary should be ~400-600 words.
-Use clear and concise language.
+Summarize the research paper.
 Follow the structure and conventions below. NO other unrelated text should be added.
 
 ## 1. Motivation of the Research Paper
