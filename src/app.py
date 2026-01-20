@@ -72,8 +72,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         bot_task = asyncio.create_task(run_bot(bot_application))
         logger.info("Telegram bot started.")
 
-    # Start the scheduler
-    scheduler = AsyncIOScheduler()
+    # Start the scheduler with explicit timezone
+    scheduler = AsyncIOScheduler(timezone=settings.scheduler_timezone)
     workflow_service = container.workflow()
 
     # Schedule the daily job at 06:00 with notifications
@@ -82,9 +82,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         "cron",
         hour=6,
         minute=0,
+        id="daily_workflow",
+        replace_existing=True,
+        coalesce=True,
+        max_instances=1,
         args=[workflow_service, settings.telegram_token],
     )
     scheduler.start()
+    next_run = scheduler.get_job("daily_workflow").next_run_time
+    logger.info(f"Scheduler started with timezone {settings.scheduler_timezone}. Next run: {next_run}")
 
     yield
 

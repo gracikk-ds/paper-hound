@@ -50,6 +50,7 @@ class Settings(BaseSettings):
     tmp_storage_dir: str = Field("storage/tmp_storage", description="Path to the temporary storage directory.")
     telegram_token: str = Field(..., description="Telegram bot token.")
     telegram_chat_id: int = Field(..., description="Chat ID to send notifications to.")
+    scheduler_timezone: str = Field("Europe/Moscow", description="Timezone for scheduler cron jobs")
 
 
 settings = Settings()
