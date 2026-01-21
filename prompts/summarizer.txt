@@ -1,4 +1,4 @@
-Summarize the research paper.
+Summarize the research paper. Use clear and concise language.
 Follow the structure and conventions below. NO other unrelated text should be added.
 
 ## 1. Motivation of the Research Paper
