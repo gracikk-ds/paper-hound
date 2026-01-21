@@ -5,28 +5,86 @@
 
 A semantic search engine for discovering ArXiv academic papers. Combines vector embeddings, LLM-powered classification and summarization, Notion integration, and a Telegram bot for automated paper discovery workflows.
 
-## Overview
-
-ArXivPaperHound helps researchers stay on top of relevant academic papers by:
-
-- **Semantic Search**: Find papers by meaning using Gemini embeddings and Qdrant vector database
-- **Intelligent Classification**: LLM-powered relevance filtering tailored to your research interests
-- **Automated Summarization**: Generate concise summaries from PDFs with image extraction
-- **Knowledge Management**: Automatically upload paper summaries to Notion databases
-- **Interactive Bot**: Search and manage papers via Telegram with subscription notifications
-- **Scheduled Workflows**: Daily automated pipeline for continuous paper discovery
-
 ## Features
 
-- **Vector-based semantic search** using Google Gemini embeddings (3072 dimensions) and Qdrant
-- **LLM-powered paper classification** with customizable prompts per research category
-- **PDF summarization** with Gemini vision model and automatic image extraction
-- **Notion integration** for organized paper storage with categories and metadata
-- **Telegram bot** for interactive search, subscriptions, and notifications
-- **Scheduled daily jobs** with configurable timezone (default: 06:00 Europe/Moscow)
-- **Processing cache** to avoid re-classifying and re-summarizing papers
-- **REST API** for programmatic access to all features
-- **Prometheus metrics** for monitoring
+- **Semantic Search**: Vector-based paper search using Gemini embeddings and Qdrant
+- **AI Classification**: LLM-powered relevance filtering with customizable prompts per category
+- **Smart Summarization**: PDF processing with Gemini vision model and automatic image extraction
+- **Notion Integration**: Automated upload of paper summaries with metadata and categorization
+- **Telegram Bot**: Interactive search, subscriptions, and automatic notifications
+- **Scheduled Workflows**: Daily automated pipeline for continuous paper discovery
+- **Processing Cache**: Avoid re-processing papers with intelligent caching
+- **REST API**: Programmatic access with comprehensive endpoints
+
+## Quick Start
+
+### Prerequisites
+
+- Docker and Docker Compose
+- Google Cloud account with Vertex AI API enabled ([setup guide](docs/SETUP.md#google-cloud--vertex-ai))
+- Notion integration token ([setup guide](docs/SETUP.md#notion-integration))
+- Telegram bot token ([setup guide](docs/SETUP.md#telegram-bot))
+- S3-compatible storage credentials ([setup guide](docs/SETUP.md#s3-compatible-storage))
+
+Full setup instructions: [docs/SETUP.md](docs/SETUP.md)
+
+### Installation
+
+1. **Clone the repository**
+
+   ```bash
+   git clone https://github.com/yourusername/ArXivPaperHound.git
+   cd ArXivPaperHound
+   ```
+
+2. **Configure environment**
+
+   ```bash
+   cp template.env .env
+   # Edit .env with your credentials (see Configuration section below)
+   ```
+
+3. **Start the application**
+
+   ```bash
+   docker-compose up -d
+   ```
+
+The API will be available at `http://localhost:8001` and the Telegram bot will start automatically.
+
+Verify it's running:
+
+```bash
+curl http://localhost:8001/health/ping
+# Expected: "🏓 pong!"
+```
+
+## Configuration
+
+### Required Environment Variables
+
+Configure these in your `.env` file:
+
+```bash
+# Google Cloud / Vertex AI
+GOOGLE_APPLICATION_CREDENTIALS=credentials/gen_lang_client.json
+
+# Telegram
+TELEGRAM_TOKEN=your_telegram_bot_token
+TELEGRAM_CHAT_ID=your_chat_id
+
+# Notion
+NOTION_TOKEN=ntn_your_notion_token
+NOTION_DATABASE_ID=your_database_id  # Optional
+
+# S3 Storage
+AWS_ACCESS_KEY_ID=your_access_key
+AWS_SECRET_ACCESS_KEY=your_secret_key
+ENDPOINT_URL=https://s3.your-provider.com
+S3_BUCKET=your-bucket-name
+```
+
+See all configuration options in [`template.env`](template.env) or the [setup guide](docs/SETUP.md).
 
 ## Architecture
 
@@ -70,357 +128,156 @@ ArXivPaperHound helps researchers stay on top of relevant academic papers by:
 
 ### Data Flow
 
-1. **Ingest**: Fetch papers from ArXiv API for specified date range and categories
-2. **Embed**: Generate vector embeddings via Gemini embedding model
+1. **Ingest**: Fetch papers from ArXiv API for configured date ranges and categories
+2. **Embed**: Generate 3072-dimensional vector embeddings using Gemini
 3. **Store**: Save papers with embeddings in Qdrant vector database
-4. **Search**: Perform semantic similarity search based on user queries
-5. **Classify**: Filter papers by relevance using LLM classifier
-6. **Summarize**: Generate markdown summaries from PDFs with extracted images
-7. **Upload**: Push summaries to Notion database with proper formatting
-8. **Notify**: Send Telegram notifications to subscribed users
-
-## Quick Start
-
-### Prerequisites
-
-- Python 3.12+
-- Docker and Docker Compose (recommended)
-- Google Cloud account with Vertex AI enabled
-- Notion integration token
-- Telegram bot token
-- S3-compatible storage (AWS S3, MinIO, etc.)
-
-### Docker Deployment (Recommended)
-
-1. Clone the repository:
-
-    ```bash
-    git clone https://github.com/yourusername/ArXivPaperHound.git
-    cd ArXivPaperHound
-    ```
-
-2. Copy the environment template and configure:
-
-    ```bash
-    cp template.env .env
-    # Edit .env with your credentials
-    ```
-
-3. Start the services:
-
-    ```bash
-    docker-compose up -d
-    ```
-
-The application will be available at `http://localhost:8001`.
-
-### Local Development
-
-1. Create and activate a virtual environment:
-
-    ```bash
-    python -m venv .venv
-    source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-    ```
-
-2. Install dependencies:
-
-    ```bash
-    pip install -r requirements.txt
-    pip install -r requirements-dev.txt  # For development
-    ```
-
-3. Start Qdrant (via Docker):
-
-    ```bash
-    docker-compose up -d qdrant
-    ```
-
-4. Run the application:
-
-    ```bash
-    uvicorn src.app:create_app --factory --reload
-    ```
-
-## Configuration
-
-### Environment Variables
-
-| Variable                         | Required | Default                 | Description                                    |
-| -------------------------------- | -------- | ----------------------- | ---------------------------------------------- |
-| `GOOGLE_APPLICATION_CREDENTIALS` | Yes      | -                       | Path to Google Cloud service account JSON      |
-| `TELEGRAM_TOKEN`                 | Yes      | -                       | Telegram bot API token from BotFather          |
-| `TELEGRAM_CHAT_ID`               | Yes      | -                       | Chat ID for admin notifications                |
-| `NOTION_TOKEN`                   | Yes      | -                       | Notion integration API token                   |
-| `NOTION_DATABASE_ID`             | No       | -                       | Notion database ID for paper storage           |
-| `NOTION_COMMAND_DATABASE_ID`     | No       | -                       | Notion database ID for category settings       |
-| `AWS_ACCESS_KEY_ID`              | Yes      | -                       | S3-compatible storage access key               |
-| `AWS_SECRET_ACCESS_KEY`          | Yes      | -                       | S3-compatible storage secret key               |
-| `ENDPOINT_URL`                   | Yes      | -                       | S3 endpoint URL                                |
-| `S3_BUCKET`                      | Yes      | -                       | S3 bucket name for images                      |
-| `QDRANT_HOST`                    | No       | `localhost`             | Qdrant server hostname                         |
-| `QDRANT_PORT`                    | No       | `6333`                  | Qdrant server port                             |
-| `QDRANT_API_KEY`                 | No       | -                       | Qdrant API key (if authentication enabled)     |
-| `GEMINI_MODEL_NAME`              | No       | `gemini-3-flash-preview`| Gemini model for classification/summarization  |
-| `EMBEDDING_SERVICE_MODEL_NAME`   | No       | `gemini-embedding-001`  | Embedding model name                           |
-| `SCHEDULER_TIMEZONE`             | No       | `Europe/Moscow`         | Timezone for scheduled jobs                    |
-| `CLASSIFIER_THINKING_LEVEL`      | No       | `LOW`                   | Extended thinking level for classifier         |
-| `SUMMARIZER_THINKING_LEVEL`      | No       | `MEDIUM`                | Extended thinking level for summarizer         |
-
-### Example `.env` File
-
-```bash
-GOOGLE_APPLICATION_CREDENTIALS=credentials/gen_lang_client.json
-TELEGRAM_TOKEN=your_telegram_bot_token
-TELEGRAM_CHAT_ID=your_chat_id
-NOTION_TOKEN=ntn_your_notion_token
-AWS_ACCESS_KEY_ID=your_access_key
-AWS_SECRET_ACCESS_KEY=your_secret_key
-ENDPOINT_URL=https://s3.your-provider.com
-S3_BUCKET=your-bucket-name
-```
+4. **Classify**: Filter papers by relevance using LLM with category-specific prompts
+5. **Summarize**: Generate markdown summaries from PDFs with extracted images
+6. **Notify**: Send results to Notion and Telegram subscribers
 
 ## Usage
 
 ### REST API
 
-#### Processor Endpoints (`/processor`)
+Key endpoints (see [full API documentation](docs/API.md)):
 
-| Endpoint               | Method | Description                            |
-| ---------------------- | ------ | -------------------------------------- |
-| `/insert-papers`       | POST   | Ingest papers from ArXiv for date range|
-| `/search-papers`       | POST   | Semantic search for papers             |
-| `/find-similar-papers` | POST   | Find papers similar to a reference     |
-| `/delete-papers`       | DELETE | Remove papers from the database        |
-| `/count-papers`        | GET    | Get total paper count                  |
+| Endpoint | Method | Description |
+| --- | --- | --- |
+| `/processor/insert-papers` | POST | Ingest papers from ArXiv for a date range |
+| `/processor/search-papers` | POST | Semantic search for papers by query |
+| `/processor/find-similar-papers` | POST | Find papers similar to a reference paper |
+| `/workflow/run` | POST | Trigger the full discovery pipeline |
+| `/health/ping` | GET | Health check |
+| `/metrics` | GET | Prometheus metrics |
 
-#### Workflow Endpoints (`/workflow`)
-
-| Endpoint | Method | Description                       |
-| -------- | ------ | --------------------------------- |
-| `/run`   | POST   | Trigger the full workflow pipeline|
-
-#### Health Endpoints (`/health`)
-
-| Endpoint   | Method | Description        |
-| ---------- | ------ | ------------------ |
-| `/status`  | GET    | Health check       |
-| `/metrics` | GET    | Prometheus metrics |
-
-### Telegram Bot Commands
-
-#### Paper Discovery
-
-- `/search <query> [k:N] [t:N] [from:DATE] [to:DATE]` - Semantic search with options
-  - `k:N` - Return top N results (default: 10)
-  - `t:N` - Similarity threshold 0-100 (default: 65)
-  - `from:DATE`, `to:DATE` - Date range filter (YYYY-MM-DD)
-- `/paper <paper_id>` - Get paper details with action buttons
-- `/similar <paper_id> [k:N] [t:N] [from:DATE] [to:DATE]` - Find similar papers
-- `/topics` - List available research categories
-
-#### Paper Management
-
-- `/summarize <paper_id|url> [cat:CategoryName]` - Generate and upload summary to Notion
-
-#### Subscriptions (Personal)
-
-- `/subscribe` - Subscribe to research topics
-- `/unsubscribe` - Manage your subscriptions
-- `/subscriptions` - List your active subscriptions
-
-#### Subscriptions (Group - Admin Only)
-
-- `/groupsubscribe` - Subscribe group to a topic
-- `/groupunsubscribe` - Remove group subscription
-- `/groupsubscriptions` - View group subscriptions
-
-#### Storage Management
-
-- `/insert` - Fetch papers for a date range
-- `/stats` - View database statistics
-
-#### General
-
-- `/start` - Welcome message and quick start guide
-- `/help` - Command reference
-
-## External Services Setup
-
-### Qdrant Vector Database
-
-Qdrant stores paper embeddings for semantic search. Using Docker:
+Example: Search for papers
 
 ```bash
-docker run -p 6333:6333 -v $(pwd)/storage/qdrant_storage:/qdrant/storage qdrant/qdrant
+curl -X POST "http://localhost:8001/processor/search-papers" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "quantum computing algorithms",
+    "top_k": 5,
+    "threshold": 0.7
+  }'
 ```
 
-Collections created automatically:
-
-- `arxiv_papers` - Paper embeddings and metadata
-- `arxiv_processing_cache` - Classification/summarization cache
-
-### Google Cloud (Vertex AI)
-
-1. Create a Google Cloud project
-2. Enable the Vertex AI API
-3. Create a service account with Vertex AI User role
-4. Download the JSON credentials file
-5. Set `GOOGLE_APPLICATION_CREDENTIALS` to the file path
-
-### Notion Integration
-
-1. Go to [Notion Integrations](https://www.notion.so/my-integrations)
-2. Create a new integration
-3. Copy the integration token
-4. Share your target database with the integration
-5. Copy the database ID from the URL
-
-### S3-Compatible Storage
-
-Any S3-compatible service works (AWS S3, MinIO, Cloudflare R2, etc.):
-
-1. Create a bucket for paper images
-2. Generate access credentials
-3. Configure endpoint URL if not AWS
+Full API reference: [docs/API.md](docs/API.md)
 
 ### Telegram Bot
 
-1. Message [@BotFather](https://t.me/botfather) on Telegram
-2. Create a new bot with `/newbot`
-3. Copy the API token
-4. Get your chat ID (message the bot and check updates API)
+#### Discovery Commands
+
+- `/search <query> [k:N] [t:N] [from:DATE] [to:DATE]` - Semantic search with filters
+- `/paper <paper_id>` - Get detailed paper information
+- `/similar <paper_id> [k:N]` - Find similar papers
+- `/topics` - List available research categories
+
+#### Management Commands
+
+- `/summarize <paper_id|url> [cat:Category]` - Generate summary and upload to Notion
+- `/insert` - Fetch papers for a date range
+- `/stats` - View database statistics
+
+#### Subscription Commands
+
+- `/subscribe` - Subscribe to research topics for automatic notifications
+- `/unsubscribe` - Manage subscriptions
+- `/subscriptions` - List active subscriptions
+
+#### Group Commands (Admin Only)
+
+- `/groupsubscribe` - Subscribe group to topics
+- `/groupunsubscribe` - Remove group subscriptions
+- `/groupsubscriptions` - View group subscriptions
+
+**Search syntax examples:**
+
+```bash
+/search quantum computing k:10 t:70
+/search machine learning for drug discovery from:2025-01-01 to:2025-01-31
+/similar 2501.12345 k:5
+```
 
 ## Development
 
-### Project Structure
+### Local Setup
 
-```text
-ArXivPaperHound/
-├── src/
-│   ├── app.py                 # FastAPI application entry point
-│   ├── settings.py            # Configuration management
-│   ├── containers/            # Dependency injection
-│   ├── routes/                # API endpoints
-│   ├── service/
-│   │   ├── workflow.py        # Main orchestration
-│   │   ├── processor.py       # Paper processing
-│   │   ├── ai_researcher/     # LLM services (classifier, summarizer)
-│   │   ├── vector_db/         # Qdrant integration
-│   │   ├── arxiv/             # ArXiv API client
-│   │   └── notion_db/         # Notion integration
-│   └── utils/                 # Utilities and schemas
-├── telegram_bot/
-│   ├── bot.py                 # Bot initialization
-│   ├── handlers/              # Command handlers
-│   ├── subscriptions.py       # Subscription management
-│   └── notifications.py       # Notification system
-├── tests/                     # Test suite
-├── prompts/                   # LLM prompt templates
-├── storage/                   # Local storage directories
-├── docker-compose.yml         # Docker services
-├── Dockerfile                 # Application container
-├── justfile                   # Just command recipes
-└── pyproject.toml             # Project configuration
-```
+For local development without Docker, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ### Running Tests
 
 ```bash
-# Run all tests
 just test
-
-# Run specific test file
-just test tests/test_workflow_endpoints.py
-
-# Run with pattern matching
-pytest -k "test_search"
-
-# Generate coverage report
-just coverage
 ```
 
 ### Code Quality
 
 ```bash
-# Format and lint with Ruff
 just lint
-
-# Run pre-commit hooks
-pre-commit run --all-files
 ```
 
-### Just Commands Reference
+For detailed development guidelines, project structure, and contribution process, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
-```bash
-just list      # Show available commands
-just lint      # Format and lint with Ruff
-just test      # Run all tests
-just coverage  # Generate HTML coverage report
-just build     # Build project package
-just clean     # Remove build artifacts
-just version   # Print current version
-just tag       # Tag and push version to GitHub
-```
+## Scheduled Jobs
 
-## Deployment
-
-### Docker Compose
-
-The included `docker-compose.yml` sets up:
-
-- **qdrant**: Vector database on port 6333
-- **app**: FastAPI application on port 8001
-
-```yaml
-services:
-  qdrant:
-    image: qdrant/qdrant:latest
-    ports:
-      - "6333:6333"
-    volumes:
-      - ./storage/qdrant_storage:/qdrant/storage
-
-  app:
-    build: .
-    ports:
-      - "8001:8001"
-    depends_on:
-      - qdrant
-    env_file:
-      - .env
-```
-
-### Production Considerations
-
-- Use `QDRANT_API_KEY` for Qdrant authentication
-- Configure proper logging and monitoring
-- Set up backup for Qdrant storage
-- Use secrets management for credentials
-- Consider running multiple Gunicorn workers for higher throughput
-
-### Scheduled Jobs
-
-The application automatically schedules a daily workflow at 06:00 (configurable via `SCHEDULER_TIMEZONE`):
+The application runs a daily workflow at 06:00 (configurable via `SCHEDULER_TIMEZONE` in `.env`):
 
 - Fetches papers from the last 4 days
-- Processes all configured categories
+- Processes all configured research categories
 - Classifies and summarizes relevant papers
 - Uploads to Notion and sends Telegram notifications
 
+## Troubleshooting
+
+**Qdrant connection errors:**
+
+- Verify Qdrant is running: `docker ps | grep qdrant`
+- Check `QDRANT_HOST` and `QDRANT_PORT` in `.env`
+
+**Google Cloud authentication errors:**
+
+- Verify `GOOGLE_APPLICATION_CREDENTIALS` path is correct
+- Ensure Vertex AI API is enabled in your Google Cloud project
+
+**Telegram bot not responding:**
+
+- Check `TELEGRAM_TOKEN` is valid
+- Verify bot is running: check logs with `docker-compose logs app`
+
+**S3 upload failures:**
+
+- Verify S3 credentials and `ENDPOINT_URL`
+- Check bucket exists and permissions are correct
+
+For detailed troubleshooting and service setup, see [docs/SETUP.md](docs/SETUP.md).
+
+## Documentation
+
+- [External Services Setup Guide](docs/SETUP.md) - Detailed configuration for Qdrant, Google Cloud, Notion, S3, and Telegram
+- [REST API Reference](docs/API.md) - Complete API documentation with examples
+- [Contributing Guide](CONTRIBUTING.md) - Development setup, project structure, and contribution guidelines
+
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
 
 Copyright (c) 2025, Gordeev A.
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on:
+
+- Setting up your development environment
+- Running tests and linting
+- Code style and best practices
+- Pull request process
+
+Quick start for contributors:
 
 1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Run tests and linting (`just lint && just test`)
-4. Commit your changes (`git commit -m 'Add amazing feature'`)
-5. Push to the branch (`git push origin feature/amazing-feature`)
-6. Open a Pull Request
+2. Create a feature branch: `git checkout -b feature/amazing-feature`
+3. Make your changes and add tests
+4. Run tests and linting: `just lint && just test`
+5. Commit: `git commit -m 'feat: add amazing feature'`
+6. Push and open a Pull Request
