@@ -63,41 +63,47 @@ def add_images_to_md(md_path: str, images_dir: str, paper_info: dict) -> None:
     figures = load_images_and_descriptions(images_dir)
     if not figures:
         logger.warning(f"No figures found in {images_dir}")
-        return
 
-    # Separate Figure 1 and the rest
-    fig1 = next(
-        ((base, img_path, desc) for (base, img_path, desc) in figures if base == "figure_1"),
-        None,
-    )
-    other_figs = [(base, img_path, desc) for (base, img_path, desc) in figures if base != "figure_1"]
-
-    if fig1 is None:
-        fig1 = other_figs[0]
-        other_figs = other_figs[1:]
-
-    # Read the original markdown
+    # Read the original markdown content - always do this
     with open(md_path, encoding="utf-8") as md_file:
         md_content = md_file.read()
 
-    # Insert Figure 1 at the top
-    if fig1:
-        _, img_path, desc = fig1
-        new_md += img_block(img_path, desc) + "\n"
+    # Process and add figures only if they exist
+    fig1 = None
+    other_figs = []
 
+    if figures:
+        # Separate Figure 1 and the rest
+        fig1 = next(
+            ((base, img_path, desc) for (base, img_path, desc) in figures if base == "figure_1"),
+            None,
+        )
+        other_figs = [(base, img_path, desc) for (base, img_path, desc) in figures if base != "figure_1"]
+
+        if fig1 is None:
+            fig1 = other_figs[0]
+            other_figs = other_figs[1:]
+
+        # Insert Figure 1 at the top
+        if fig1:
+            _, img_path, desc = fig1
+            new_md += img_block(img_path, desc) + "\n"
+
+    # Append original content - always do this
     new_md += md_content.rstrip()
 
-    if not other_figs:
-        # Continue writing even when no additional figures are present
-        logger.warning(f"No other figures found in {images_dir}")
-    else:
+    # Add other figures section only if they exist
+    if figures and other_figs:
         new_md = new_md + "\n\n"
         new_md = new_md + "## 6. Paper Figures\n"
 
         # Append other figures
         for _, img_path, desc in other_figs:
             new_md += img_block(img_path, desc) + "\n"
+    elif figures and not other_figs:
+        # Continue writing even when no additional figures are present
+        logger.warning(f"No other figures found in {images_dir}")
 
-    # Write back to the markdown file
+    # Write back to the markdown file - always do this
     with open(md_path, "w", encoding="utf-8") as md_file:
         md_file.write(new_md)
