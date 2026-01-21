@@ -65,8 +65,8 @@ def create_bot_application(
     bot_context.container = container
     bot_context.admin_user_ids = admin_user_ids or set()
 
-    # Build application
-    application = Application.builder().token(token).build()
+    # Build application with concurrent update processing
+    application = Application.builder().token(token).concurrent_updates(10).build()
 
     # Register command handlers
     application.add_handler(CommandHandler("start", handle_start))
