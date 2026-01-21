@@ -196,7 +196,7 @@ class MarkdownToNotionUploader:
             return True
 
     def _parse_rich_text(self, line: str) -> list[dict[str, Any]]:
-        """Parse a line for **bold** markdown and return Notion rich_text objects.
+        """Parse a line for **bold** markdown and $inline equations$ and return Notion rich_text objects.
 
         Args:
             line (str): Line of text to parse.
@@ -204,37 +204,49 @@ class MarkdownToNotionUploader:
         Returns:
             List[Dict[str, Any]]: List of Notion rich_text objects.
         """
-        segments = []
-        pattern = r"\*\*(.+?)\*\*"
-        last_end = 0
+        segments: list[dict[str, Any]] = []
 
-        for match in re.finditer(pattern, line):
-            # Add normal text before the bold
+        # Combined pattern for bold (**text**) and inline equations ($equation$)
+        # Use negative lookbehind to avoid matching escaped dollars (\$)
+        # For inline equations: match $...$ but not $$ (block equation markers)
+        # The (?<![^$]\$) lookbehind prevents matching when preceded by non-$ followed by $
+        # This handles: $$block$$ (don't match) vs $a$$b$ (match both)
+        # Pattern matches: **bold** or $equation$
+        combined_pattern = r"(\*\*(.+?)\*\*)|(?<!\\)(?<!\$)\$(?!\$)([^$]+?)\$"
+
+        last_end = 0
+        for match in re.finditer(combined_pattern, line):
+            # Add normal text before the match
             if match.start() > last_end:
                 text = line[last_end : match.start()]
                 if text:
-                    segments.append(
-                        {
-                            "type": "text",
-                            "text": {"content": text},
+                    segments.append({"type": "text", "text": {"content": text}})
+
+            if match.group(2):  # Bold match (group 2 is the bold content)
+                bold_text = match.group(2)
+                segments.append(
+                    {
+                        "type": "text",
+                        "text": {"content": bold_text},
+                        "annotations": {
+                            "bold": True,
+                            "italic": False,
+                            "strikethrough": False,
+                            "underline": False,
+                            "code": False,
+                            "color": "default",
                         },
-                    )
-            # Add bold text
-            bold_text = match.group(1)
-            segments.append(
-                {
-                    "type": "text",
-                    "text": {"content": bold_text},
-                    "annotations": {
-                        "bold": True,
-                        "italic": False,
-                        "strikethrough": False,
-                        "underline": False,
-                        "code": False,
-                        "color": "default",
                     },
-                },
-            )
+                )
+            elif match.group(3):  # Equation match (group 3 is the equation content)
+                equation_expr = match.group(3)
+                segments.append(
+                    {
+                        "type": "equation",
+                        "equation": {"expression": equation_expr},
+                    },
+                )
+
             last_end = match.end()
 
         # Add the rest of the text after the last match
@@ -242,9 +254,11 @@ class MarkdownToNotionUploader:
             text = line[last_end:]
             if text:
                 segments.append({"type": "text", "text": {"content": text}})
+
         # If nothing matched, just return the line as normal text
         if not segments:
             segments.append({"type": "text", "text": {"content": line}})
+
         return segments
 
     def _parse_heading(self, line: str, blocks: list[dict[str, Any]]) -> bool:
@@ -329,11 +343,28 @@ class MarkdownToNotionUploader:
             },
         )
 
-    def markdown_to_blocks(
+    def _add_equation_block(self, expression: str, blocks: list[dict[str, Any]]) -> None:
+        """Add a block equation to the blocks list.
+
+        Args:
+            expression: The LaTeX expression for the equation.
+            blocks: List of Notion blocks to append to.
+        """
+        expression = expression.strip()
+        if expression:  # Only add non-empty equations
+            blocks.append(
+                {
+                    "object": "block",
+                    "type": "equation",
+                    "equation": {"expression": expression},
+                },
+            )
+
+    def markdown_to_blocks(  # noqa: PLR0912, PLR0915
         self,
         markdown: str,
     ) -> tuple[list[dict[str, Any]], str, str, str, list[str]]:
-        """Convert basic Markdown text to Notion blocks. Support headings, paragraphs, bullet points.
+        """Convert basic Markdown text to Notion blocks. Support headings, paragraphs, bullet points, equations.
 
         Args:
             markdown (str): Markdown text to convert.
@@ -352,7 +383,11 @@ class MarkdownToNotionUploader:
         title = ""
         arxiv_url = ""
         published_date = "2022-01-01"
-        authors = []
+        authors: list[str] = []
+
+        # State for multi-line block equations
+        in_block_equation = False
+        block_equation_lines: list[str] = []
 
         for line in lines:
             line = line.rstrip()  # noqa: PLW2901
@@ -360,6 +395,38 @@ class MarkdownToNotionUploader:
             # Check if the line is a meta line
             skip_line, lines_to_remove = self._remove_meta_lines(line, lines_to_remove=lines_to_remove)
             if skip_line:
+                continue
+
+            # Handle multi-line block equations
+            if in_block_equation:
+                if line == "$$" or line.endswith("$$"):
+                    # End of multi-line block equation
+                    if line.endswith("$$") and line != "$$":
+                        # Line contains content before closing $$
+                        block_equation_lines.append(line[:-2])
+                    expression = "\n".join(block_equation_lines)
+                    self._add_equation_block(expression, blocks)
+                    in_block_equation = False
+                    block_equation_lines = []
+                else:
+                    # Inside multi-line block equation
+                    block_equation_lines.append(line)
+                continue
+
+            # Check for single-line block equation: $$...$$
+            # Minimum length for valid block equation is 5 (e.g., "$$x$$")
+            min_block_equation_len = 5
+            if line.startswith("$$") and line.endswith("$$") and len(line) >= min_block_equation_len:
+                expression = line[2:-2]
+                self._add_equation_block(expression, blocks)
+                continue
+
+            # Check for start of multi-line block equation
+            if line == "$$" or (line.startswith("$$") and not line.endswith("$$")):
+                in_block_equation = True
+                if line != "$$":
+                    # Line has content after opening $$
+                    block_equation_lines.append(line[2:])
                 continue
 
             if first_heading and line.startswith("## "):
