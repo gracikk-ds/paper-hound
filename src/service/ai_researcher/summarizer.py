@@ -1,6 +1,7 @@
 """Summarizer for research papers."""
 
 from pathlib import Path
+from typing import Literal
 
 from loguru import logger
 
@@ -26,17 +27,30 @@ class Summarizer:
         with open(path_to_prompt, encoding="utf-8") as file:
             self.default_prompt = file.read()
 
-    def summarize(self, paper: Paper, pdf_path: Path) -> tuple[str | None, str | None]:
+    def summarize(
+        self,
+        paper: Paper,
+        pdf_path: Path,
+        model_name: str | None = None,
+        thinking_level: Literal["LOW", "MEDIUM", "HIGH"] | None = None,
+    ) -> tuple[str | None, str | None]:
         """Summarize a research paper.
 
         Args:
             paper (Paper): The paper to summarize.
             pdf_path (Path): The path to the PDF file.
+            model_name (str | None): Optional model name to override the default.
+            thinking_level (Literal["LOW", "MEDIUM", "HIGH"] | None): Optional thinking level to override.
 
         Returns:
             tuple[str | None, str | None]: The summary text and the path to the markdown file.
         """
-        response_text = self.llm_client(self.default_prompt, pdf_local_path=str(pdf_path))
+        response_text = self.llm_client(
+            self.default_prompt,
+            pdf_local_path=str(pdf_path),
+            model_name=model_name,
+            thinking_level=thinking_level,
+        )
         self.inference_price = self.llm_client.inference_price
         self.total_price += self.inference_price
         logger.info(f"Summarizer inference price: {self.llm_client.inference_price}")

@@ -1,12 +1,10 @@
 """Price calculation for Gemini API."""
 
 GEMINI_PRICE: dict[str, dict[str, float]] = {
-    "gemini-2.0-flash": {"input": 0.1, "output": 0.4},
-    "gemini-1.5-flash": {"input": 0.075, "output": 0.3},
-    "gemini-1.5-pro": {"input": 1.25, "output": 5.0},
     "gemini-2.5-flash": {"input": 0.15, "output": 0.6},
     "gemini-2.5-pro": {"input": 1.25, "output": 10.0},
     "gemini-3-flash-preview": {"input": 0.50, "output": 3.00, "cached_content": 0.05},
+    "gemini-3-pro-preview": {"input": 2.0, "output": 12.0, "cached_content": 0.2},
 }
 
 
@@ -15,6 +13,10 @@ MILLION_TOKENS: int = 1000000
 
 def get_base_model_name(endpoint_name: str) -> str:
     """Get the base model name from the endpoint name.
+
+    Validates that the endpoint name starts with a known base model name.
+    This allows endpoint variants like 'gemini-2.5-flash-001' while rejecting
+    arbitrary strings that happen to contain a model name as a substring.
 
     Args:
         endpoint_name (str): The name of the endpoint.
@@ -26,7 +28,7 @@ def get_base_model_name(endpoint_name: str) -> str:
         ValueError: If the model is not found.
     """
     for base_name in GEMINI_PRICE:
-        if base_name in endpoint_name:
+        if endpoint_name.startswith(base_name):
             return base_name
     msg = f"Unknown model: {endpoint_name}"
     raise ValueError(msg)

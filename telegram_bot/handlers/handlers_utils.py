@@ -7,7 +7,8 @@ from loguru import logger
 
 from src.service.notion_db.extract_page_content import NotionPageExtractor
 from src.settings import settings as api_settings
-from telegram_bot.handlers.defaults import DEFAULT_CATEGORY, DEFAULT_THRESHOLD, DEFAULT_TOP_K
+from src.utils.price_caculation import GEMINI_PRICE
+from telegram_bot.handlers.defaults import ALLOWED_THINKING_LEVELS, DEFAULT_CATEGORY, DEFAULT_THRESHOLD, DEFAULT_TOP_K
 from telegram_bot.handlers.schemas import SearchParams, SummarizeParams
 
 
@@ -142,6 +143,8 @@ def parse_summarize_params(args: list[str]) -> SummarizeParams:
 
     Supports the following options:
         cat:CategoryName - Research category (default: AdHoc Research)
+        model:ModelName - Model name to use for summarization
+        think:LEVEL - Thinking level (LOW, MEDIUM, HIGH)
 
     Args:
         args: List of arguments from the command.
@@ -155,17 +158,93 @@ def parse_summarize_params(args: list[str]) -> SummarizeParams:
 
         >>> parse_summarize_params(["2601.02242", "cat:Image Editing"])
         SummarizeParams(paper_id="2601.02242", category="Image Editing")
+
+        >>> parse_summarize_params(["2601.02242", "model:gemini-2.5-pro", "think:HIGH"])
+        SummarizeParams(paper_id="2601.02242", model_name="gemini-2.5-pro", thinking_level="HIGH")
     """
     paper_id = ""
     category = DEFAULT_CATEGORY
+    model_name: str | None = None
+    thinking_level: str | None = None
+    raw_thinking_level: str | None = None
+
     category_pattern = re.compile(r"^cat:(.+)$")
+    model_pattern = re.compile(r"^model:(.+)$")
+    think_pattern = re.compile(r"^think:(.+)$", re.IGNORECASE)
 
     for arg in args:
         cat_match = category_pattern.match(arg)
+        model_match = model_pattern.match(arg)
+        think_match = think_pattern.match(arg)
+
         if cat_match:
             category = cat_match.group(1).strip()
+        elif model_match:
+            model_name = model_match.group(1).strip()
+        elif think_match:
+            raw_thinking_level = think_match.group(1).strip()
+            level = raw_thinking_level.upper()
+            if level in ALLOWED_THINKING_LEVELS:
+                thinking_level = level
         elif not paper_id:
             # First non-option argument is the paper_id
             paper_id = normalize_paper_id(arg)
 
-    return SummarizeParams(paper_id=paper_id, category=category)
+    return SummarizeParams(
+        paper_id=paper_id,
+        category=category,
+        model_name=model_name,
+        thinking_level=thinking_level,  # type: ignore[arg-type]
+        raw_thinking_level=raw_thinking_level,
+    )
+
+
+def get_available_models() -> list[str]:
+    """Get list of available model names from GEMINI_PRICE dict.
+
+    Returns:
+        List of available model names.
+    """
+    return list(GEMINI_PRICE.keys())
+
+
+def is_valid_model_name(model_name: str) -> bool:
+    """Check if the model name is valid.
+
+    Validates that the model name starts with a known base model name.
+    This allows endpoint variants like 'gemini-2.5-flash-001' while rejecting
+    arbitrary strings that happen to contain a model name as a substring.
+
+    Args:
+        model_name: The model name to check.
+
+    Returns:
+        True if the model name starts with a known base model, False otherwise.
+    """
+    return any(model_name.startswith(base_name) for base_name in GEMINI_PRICE)
+
+
+def validate_summarize_params(params: SummarizeParams) -> str | None:
+    """Validate summarize parameters and return error message if invalid.
+
+    Args:
+        params: The parsed summarize parameters.
+
+    Returns:
+        Error message string if validation fails, None if all params are valid.
+    """
+    errors: list[str] = []
+
+    # Validate model name if provided
+    if params.model_name is not None and not is_valid_model_name(params.model_name):
+        available = ", ".join(get_available_models())
+        errors.append(f"Unknown model: '{params.model_name}'\nAvailable models: {available}")
+
+    # Validate thinking level - check if raw input was provided but not valid
+    if params.raw_thinking_level is not None and params.thinking_level is None:
+        allowed = ", ".join(sorted(ALLOWED_THINKING_LEVELS))
+        errors.append(f"Invalid thinking level: '{params.raw_thinking_level}'\nAllowed values: {allowed}")
+
+    if errors:
+        return "\n\n".join(errors)
+    return None
