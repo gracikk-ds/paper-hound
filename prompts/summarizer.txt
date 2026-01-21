@@ -16,7 +16,7 @@ Answer each question in 1–3 sentences. Use this format:
 - [What is introduced] - [Why it matters / improvement over prior work]
 
 **Methodology**:
-Provide a comprehensive explanation of how the method or its components work. Write at least 4-6 sentences with sufficient technical detail to understand the full approach. Do not be vague or skip important details.
+Provide a comprehensive explanation of how the method or its components work. Write at least 4-6 sentences with sufficient technical detail to understand the full approach. Do not be vague or skip important details. Start a new paragraph for each key component.
 
 ## 3. Datasets Used / Presented
 
