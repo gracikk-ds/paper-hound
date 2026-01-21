@@ -1,4 +1,4 @@
-Summarize the research paper. Use clear and concise language.
+Summarize the research paper. Use clear language throughout.
 Follow the structure and conventions below. NO other unrelated text should be added.
 
 ## 1. Motivation of the Research Paper
@@ -16,10 +16,7 @@ Answer each question in 1–3 sentences. Use this format:
 - [What is introduced] - [Why it matters / improvement over prior work]
 
 **Methodology**:
-- **Input/Output**: [What goes in, what comes out - if relevant]
-- **Core mechanism**: [Key algorithmic or architectural idea described in detail - if relevant]
-- **Objective**: [Loss function or training objective — if novel or central to the method]
-- **Training/Compute**: [training regime, compute requirements, etc — if reported]
+Provide a comprehensive explanation of how the method or its components work. Write at least 4-6 sentences with sufficient technical detail to understand the full approach. Do not be vague or skip important details.
 
 ## 3. Datasets Used / Presented
 
