@@ -8,6 +8,7 @@ import asyncio
 import datetime
 import shutil
 from pathlib import Path
+from typing import Literal
 
 from loguru import logger
 
@@ -88,12 +89,16 @@ class WorkflowService:
         self,
         paper_id: str,
         category: str = "AdHoc Research",
+        model_name: str | None = None,
+        thinking_level: Literal["LOW", "MEDIUM", "HIGH"] | None = None,
     ) -> str | None:
         """Process a single paper: fetch, download, summarize, and upload to Notion.
 
         Args:
             paper_id (str): The ID of the paper to process.
             category (str): Category for Notion upload.
+            model_name (str | None): Optional model name to override the default.
+            thinking_level (Literal["LOW", "MEDIUM", "HIGH"] | None): Optional thinking level to override.
 
         Returns:
             str | None: The URL of the created Notion page, or None if failed.
@@ -130,7 +135,12 @@ class WorkflowService:
         # Summarize paper
         url: str | None = None
         try:
-            _, md_path_str = self.summarizer.summarize(paper, tmp_pdf_path)
+            _, md_path_str = self.summarizer.summarize(
+                paper,
+                tmp_pdf_path,
+                model_name=model_name,
+                thinking_level=thinking_level,
+            )
             if md_path_str is None:
                 logger.error(f"Error summarizing paper: {paper.title}")
                 # Cache the failed result

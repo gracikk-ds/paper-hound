@@ -1,5 +1,7 @@
 """Settings for the application."""
 
+from typing import Literal
+
 from pydantic import BaseModel
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -78,6 +80,8 @@ class SummarizeRequest(BaseModel):
 
     paper_id: str
     category: str = "AdHoc Research"
+    model_name: str | None = None
+    thinking_level: Literal["LOW", "MEDIUM", "HIGH"] | None = None
 
 
 class ClassifyRequest(BaseModel):

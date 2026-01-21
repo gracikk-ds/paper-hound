@@ -76,6 +76,8 @@ def summarize_paper(
         request: The summarization request containing:
             - paper_id (str): The arXiv paper ID (e.g., "2601.02242") or full URL.
             - category (str): The research category for Notion organization. Defaults to "AdHoc Research".
+            - model_name (str | None): Optional model name to override the default.
+            - thinking_level (Literal["LOW", "MEDIUM", "HIGH"] | None): Optional thinking level.
         workflow: Injected workflow service for summary generation and upload.
 
     Returns:
@@ -87,7 +89,12 @@ def summarize_paper(
     category = _normalize_category(request.category)
 
     try:
-        result = workflow.prepare_paper_summary_and_upload(paper_id=request.paper_id, category=category)
+        result = workflow.prepare_paper_summary_and_upload(
+            paper_id=request.paper_id,
+            category=category,
+            model_name=request.model_name,
+            thinking_level=request.thinking_level,
+        )
     except Exception as exp:
         logger.error(f"Error generating summary for {request.paper_id}: {exp}")
         raise HTTPException(status_code=500, detail="Failed to summarize paper") from exp

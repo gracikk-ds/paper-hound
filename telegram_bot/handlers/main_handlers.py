@@ -15,7 +15,7 @@ from telegram_bot.formatters import (
     format_search_results,
     format_similar_results,
 )
-from telegram_bot.handlers.handlers_utils import parse_search_params, parse_summarize_params
+from telegram_bot.handlers.handlers_utils import parse_search_params, parse_summarize_params, validate_summarize_params
 from telegram_bot.handlers.schemas import SearchParams
 from telegram_bot.keyboards import (
     build_paper_actions_keyboard,
@@ -204,6 +204,8 @@ async def handle_summarize(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
     Supports optional parameters:
         cat:CategoryName - Research category (default: AdHoc Research)
+        model:ModelName - Model name to use for summarization
+        think:LEVEL - Thinking level (LOW, MEDIUM, HIGH)
 
     Accepts paper IDs or full arXiv/alphaxiv URLs.
 
@@ -215,11 +217,14 @@ async def handle_summarize(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         await update.message.reply_text(
             "Usage: /summarize <paper_id|url> [options]\n\n"
             "Options:\n"
-            "  cat:Name - Research category (default: AdHoc Research)\n\n"
+            "  cat:Name - Research category (default: AdHoc Research)\n"
+            "  model:Name - Model name (e.g., gemini-2.5-pro)\n"
+            "  think:LEVEL - Thinking level (LOW, MEDIUM, HIGH)\n\n"
             "Examples:\n"
             "  /summarize 2601.02242\n"
             "  /summarize https://arxiv.org/abs/2601.02242\n"
-            "  /summarize 2601.02242 cat:ML",
+            "  /summarize 2601.02242 cat:ML\n"
+            "  /summarize 2601.02242 model:gemini-2.5-pro think:HIGH",
         )
         return
 
@@ -229,10 +234,26 @@ async def handle_summarize(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         await update.message.reply_text("Please provide a paper ID or arXiv URL.")
         return
 
+    # Validate model name and thinking level
+    validation_error = validate_summarize_params(params)
+    if validation_error:
+        await update.message.reply_text(f"Invalid parameters:\n\n{validation_error}")
+        return
+
     escaped_id = _escape_markdown(params.paper_id)
     escaped_cat = _escape_markdown(params.category)
+
+    # Build status message with model/thinking info if specified
+    status_parts = [f"Generating summary for `{escaped_id}` \\(category: {escaped_cat}\\)"]
+    if params.model_name:
+        escaped_model = _escape_markdown(params.model_name)
+        status_parts.append(f"Model: {escaped_model}")
+    if params.thinking_level:
+        status_parts.append(f"Thinking: {params.thinking_level}")
+    status_parts.append("This may take a few minutes\\.")
+
     status_msg = await update.message.reply_text(
-        f"Generating summary for `{escaped_id}` \\(category: {escaped_cat}\\)\\.\\.\\.\nThis may take a few minutes\\.",
+        "\n".join(status_parts),
         parse_mode=ParseMode.MARKDOWN_V2,
     )
 
@@ -244,7 +265,12 @@ async def handle_summarize(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
         notion_url = await loop.run_in_executor(
             None,
-            lambda: workflow.prepare_paper_summary_and_upload(paper_id=params.paper_id, category=params.category),
+            lambda: workflow.prepare_paper_summary_and_upload(
+                paper_id=params.paper_id,
+                category=params.category,
+                model_name=params.model_name,
+                thinking_level=params.thinking_level,
+            ),
         )
         costs = workflow.summarizer.inference_price
         costs_str = f"{costs:.3f}".replace(".", "\\.")

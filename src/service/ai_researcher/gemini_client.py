@@ -118,11 +118,12 @@ class GeminiApiClient:
             raise ValueError(msg)  # noqa: TRY004
         self._system_prompt = prompt
 
-    def calculate_stats(self, response: GenerateContentResponse) -> None:
+    def calculate_stats(self, response: GenerateContentResponse, effective_model: str | None = None) -> None:
         """Calculate the stats for the response.
 
         Args:
             response (GenerateContentResponse): The response from Gemini.
+            effective_model (str | None): The model used for this request (for accurate pricing).
         """
         # Calculate the stats
         prompt_token_count = getattr(response.usage_metadata, "prompt_token_count", 0) or 0
@@ -130,8 +131,9 @@ class GeminiApiClient:
         thoughts_token_count = getattr(response.usage_metadata, "thoughts_token_count", 0) or 0
         cached_content_token_count = getattr(response.usage_metadata, "cached_content_token_count", 0) or 0
 
+        model_for_pricing = effective_model if effective_model is not None else self.model_name
         self.inference_price = calculate_inference_price(
-            model_name=self.model_name,
+            model_name=model_for_pricing,
             total_input_token_count=prompt_token_count,
             cached_content_token_count=cached_content_token_count,
             total_output_token_count=candidates_token_count + thoughts_token_count,
@@ -152,11 +154,18 @@ class GeminiApiClient:
         """Clear all attached document URIs."""
         self.file_uris = []
 
-    def ask(self, user_prompt: str) -> GenerateContentResponse:
+    def ask(
+        self,
+        user_prompt: str,
+        model_name: str | None = None,
+        thinking_level: Literal["LOW", "MEDIUM", "HIGH"] | None = None,
+    ) -> GenerateContentResponse:
         """Send a prompt to Gemini, with optional system, PDF, and image inputs.
 
         Args:
             user_prompt (str): The user prompt to send to Gemini.
+            model_name (str | None): Optional model name to override the default.
+            thinking_level (Literal["LOW", "MEDIUM", "HIGH"] | None): Optional thinking level to override.
 
         Returns:
             GenerateContentResponse: The generated content response.
@@ -178,24 +187,38 @@ class GeminiApiClient:
         # User message
         contents.append(Content(role="user", parts=[Part(text=user_prompt)]))
 
+        # Determine effective model and thinking level
+        effective_model = model_name if model_name is not None else self.model_name
+        effective_thinking = (
+            ThinkingLevel(thinking_level.upper()) if thinking_level is not None else self.thinking_level
+        )
+
         # Generate the content
         response = self.client.models.generate_content(
-            model=self.model_name,
+            model=effective_model,
             contents=contents,  # type: ignore
             config=GenerateContentConfig(
                 temperature=self.temperature,
-                thinking_config=ThinkingConfig(thinking_level=self.thinking_level),
+                thinking_config=ThinkingConfig(thinking_level=effective_thinking),
             ),
         )
-        self.calculate_stats(response)
+        self.calculate_stats(response, effective_model)
         return response
 
-    def __call__(self, user_prompt: str, pdf_local_path: str | None = None) -> str | None:
+    def __call__(
+        self,
+        user_prompt: str,
+        pdf_local_path: str | None = None,
+        model_name: str | None = None,
+        thinking_level: Literal["LOW", "MEDIUM", "HIGH"] | None = None,
+    ) -> str | None:
         """Send a prompt to Gemini, with optional system, PDF, and image inputs.
 
         Args:
             user_prompt (str): The user prompt to send to Gemini.
             pdf_local_path (Optional[str]): The local path to the PDF file to attach.
+            model_name (str | None): Optional model name to override the default.
+            thinking_level (Literal["LOW", "MEDIUM", "HIGH"] | None): Optional thinking level to override.
 
         Returns:
             str | None: The generated text response.
@@ -206,7 +229,7 @@ class GeminiApiClient:
             self.attach_pdf(pdf_uri)
 
         # Send the prompt to Gemini
-        response = self.ask(user_prompt)
+        response = self.ask(user_prompt, model_name=model_name, thinking_level=thinking_level)
 
         # Remove the PDF file from the bucket
         if pdf_local_path is not None:

@@ -26,6 +26,8 @@ def test_summarize_paper_success(mock_workflow: Mock) -> None:
     mock_workflow.prepare_paper_summary_and_upload.assert_called_once_with(
         paper_id="1234.5678",
         category="Physics",
+        model_name=None,
+        thinking_level=None,
     )
 
 
@@ -40,6 +42,8 @@ def test_summarize_paper_normalizes_empty_category(mock_workflow: Mock) -> None:
     mock_workflow.prepare_paper_summary_and_upload.assert_called_once_with(
         paper_id="1234.5678",
         category="AdHoc Research",
+        model_name=None,
+        thinking_level=None,
     )
 
 

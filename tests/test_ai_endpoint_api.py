@@ -56,6 +56,8 @@ def test_summarize_paper_success(
     mock_workflow.prepare_paper_summary_and_upload.assert_called_once_with(
         paper_id="1234.5678",
         category="Physics",
+        model_name=None,
+        thinking_level=None,
     )
 
 
