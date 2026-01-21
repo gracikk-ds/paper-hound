@@ -1,8 +1,21 @@
 """Utilities for working with extracted images and markdown generation."""
 
 import os
+import re
 
 from loguru import logger
+
+
+def _natural_sort_key(filename: str) -> list:
+    """Generate a natural sort key for filenames with numbers.
+
+    Args:
+        filename (str): The filename to generate a key for.
+
+    Returns:
+        list: A list of alternating strings and integers for natural sorting.
+    """
+    return [int(text) if text.isdigit() else text.lower() for text in re.split(r"(\d+)", filename)]
 
 
 def load_images_and_descriptions(images_dir: str) -> list[tuple[str, str, str]]:
@@ -15,7 +28,7 @@ def load_images_and_descriptions(images_dir: str) -> list[tuple[str, str, str]]:
         list[tuple[str, str, str]]: List of tuples containing the base name, image path, and description.
     """
     figures: list[tuple[str, str, str]] = []
-    for fname in sorted(os.listdir(images_dir)):  # noqa: PTH208
+    for fname in sorted(os.listdir(images_dir), key=_natural_sort_key):  # noqa: PTH208
         if fname.endswith(".jpg"):
             base = fname[:-4]
             txt_path = os.path.join(images_dir, base + ".txt")
