@@ -4,6 +4,8 @@ from telegram import Update
 from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 
+from telegram_bot.handlers.help_texts import get_command_help
+
 HELP_TEXT = """
 *ArXiv Paper Hound Bot*
 
@@ -18,10 +20,12 @@ HELP_TEXT = """
 
 /paper \\<paper\\_id\\> \\- Get paper details by arXiv ID
 
-/summarize \\<paper\\_id\\> \\[cat:Category\\] \\- Generate AI summary
+/summarize \\<paper\\_id\\> \\[cat:Category\\] \\[model:Model\\] \\[think:LEVEL\\] \\- Generate AI summary
 Accepts arXiv URLs or plain IDs
 *Summarize Options:*
 • `cat:Name` \\- Research category \\(default: AdHoc Research\\)
+• `model:Name` \\- Model name \\(default: gemini-2\\.5\\-pro\\)
+• `think:LEVEL` \\- Thinking level \\(default: LOW\\)
 
 *Personal Subscription Commands:*
 /topics \\- Show all available topics
@@ -72,11 +76,17 @@ async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     await update.message.reply_text(WELCOME_TEXT, parse_mode=ParseMode.MARKDOWN_V2)
 
 
-async def handle_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:  # noqa: ARG001
+async def handle_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle the /help command.
+
+    Supports:
+        /help - Show all commands
+        /help <command> - Show help for specific command
 
     Args:
         update: The update object.
         context: The callback context.
     """
-    await update.message.reply_text(HELP_TEXT, parse_mode=ParseMode.MARKDOWN_V2)
+    command = context.args[0] if context.args else None
+    help_text = get_command_help(command)
+    await update.message.reply_text(help_text, parse_mode=ParseMode.MARKDOWN_V2)
