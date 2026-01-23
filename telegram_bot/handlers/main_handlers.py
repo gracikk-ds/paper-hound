@@ -218,13 +218,13 @@ async def handle_summarize(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             "Usage: /summarize <paper_id|url> [options]\n\n"
             "Options:\n"
             "  cat:Name - Research category (default: AdHoc Research)\n"
-            "  model:Name - Model name (e.g., gemini-2.5-pro)\n"
+            "  model:Name - Model name (e.g., gemini-3-pro-preview)\n"
             "  think:LEVEL - Thinking level (LOW, MEDIUM, HIGH)\n\n"
             "Examples:\n"
             "  /summarize 2601.02242\n"
             "  /summarize https://arxiv.org/abs/2601.02242\n"
             "  /summarize 2601.02242 cat:ML\n"
-            "  /summarize 2601.02242 model:gemini-2.5-pro think:HIGH",
+            "  /summarize 2601.02242 model:gemini-3-pro-preview think:HIGH",
         )
         return
 

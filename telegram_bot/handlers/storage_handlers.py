@@ -86,7 +86,7 @@ async def handle_stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         # Generate and send chart if monthly data is available
         if monthly_data:
             chart_path = await loop.run_in_executor(None, lambda: generate_monthly_chart(monthly_data))
-            with aiofiles.open(chart_path, "rb") as photo:
+            async with aiofiles.open(chart_path, "rb") as photo:
                 await update.message.reply_photo(photo=await photo.read(), caption="Papers per month (last 12 months)")
             # Clean up temp file
             chart_path.unlink(missing_ok=True)

@@ -49,14 +49,14 @@ COMMAND_HELP = {
         "description": "Generates a comprehensive summary of the paper using Gemini AI and uploads it to Notion. Accepts paper IDs or arXiv URLs.",
         "options": [
             ("cat:Name", "Research category for organization (default: AdHoc Research)"),
-            ("model:Name", "Model name to use (e.g., gemini-2.5-pro)"),
+            ("model:Name", "Model name to use (e.g., gemini-3-pro-preview)"),
             ("think:LEVEL", "Thinking level: LOW, MEDIUM, or HIGH"),
         ],
         "examples": [
             "/summarize 2601.02242",
             "/summarize https://arxiv.org/abs/2601.02242",
             "/summarize 2601.02242 cat:Image Editing",
-            "/summarize 2601.02242 model:gemini-2.5-pro think:HIGH",
+            "/summarize 2601.02242 model:gemini-3-pro-preview think:HIGH",
         ],
     },
     "topics": {
@@ -196,7 +196,7 @@ def format_general_help() -> str:
         lines.append(f"*{category}:*")
         for cmd in commands:
             info = COMMAND_HELP[cmd]
-            lines.append(f"  `/{cmd}` \\- {_escape_markdown(info['description'][:50])}...")
+            lines.append(f"  `/{cmd}` \\- {_escape_markdown(info['description'])}")
         lines.append("")
 
     lines.append("*Quick Examples:*")
