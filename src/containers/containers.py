@@ -92,24 +92,24 @@ class AppContainer(containers.DeclarativeContainer):
         database_id=config.notion_database_id,
     )
     # LLM entities
-    llm_client_classifier: providers.Singleton[GeminiApiClient] = providers.Singleton(
+    llm_client_classifier: providers.Factory[GeminiApiClient] = providers.Factory(
         GeminiApiClient,
         model_name=config.gemini_model_name,
         thinking_level=config.classifier_thinking_level,
     )
 
-    llm_client_summarizer: providers.Singleton[GeminiApiClient] = providers.Singleton(
+    llm_client_summarizer: providers.Factory[GeminiApiClient] = providers.Factory(
         GeminiApiClient,
         model_name=config.gemini_model_name,
         thinking_level=config.summarizer_thinking_level,
     )
 
-    classifier: providers.Singleton[Classifier] = providers.Singleton(
+    classifier: providers.Factory[Classifier] = providers.Factory(
         Classifier,
         llm_client=llm_client_classifier,
     )
 
-    summarizer: providers.Singleton[Summarizer] = providers.Singleton(
+    summarizer: providers.Factory[Summarizer] = providers.Factory(
         Summarizer,
         llm_client=llm_client_summarizer,
         path_to_prompt=config.summarizer_path_to_prompt,
@@ -118,7 +118,7 @@ class AppContainer(containers.DeclarativeContainer):
 
     notion_settings_extractor: providers.Singleton[NotionPageExtractor] = providers.Singleton(NotionPageExtractor)
 
-    workflow: providers.Singleton[WorkflowService] = providers.Singleton(
+    workflow: providers.Factory[WorkflowService] = providers.Factory(
         WorkflowService,
         processor=processor,
         classifier=classifier,
