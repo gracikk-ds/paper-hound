@@ -113,8 +113,8 @@ class PapersProcessor:
 
         # get only papers inside the date range
         filter_conditions = []
-        start_dt = None
-        end_dt = None
+        start_dt: datetime | None = None
+        end_dt: datetime | None = None
 
         # Add a lower-bound date condition if a start date is provided
         if start_date_str:
@@ -273,3 +273,14 @@ class PapersProcessor:
     def count_papers(self) -> int:
         """Returns the total number of papers in the vector store."""
         return self.vector_store.count()
+
+    def get_papers_by_month(self, num_months: int = 12) -> dict[str, int]:
+        """Get paper counts by month for the last N months.
+
+        Args:
+            num_months (int): Number of recent months to include. Default is 12.
+
+        Returns:
+            dict[str, int]: Dictionary mapping "YYYY-MM" to paper count.
+        """
+        return self.vector_store.get_papers_by_month(num_months)
