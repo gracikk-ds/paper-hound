@@ -119,7 +119,8 @@ class WorkflowService:
                     if page_id:
                         self.notion_uploader.add_category_to_page(page_id, category)
                         logger.info(f"Added category '{category}' to existing page for paper {paper_id}")
-            return cached_result.notion_page_url
+                return cached_result.notion_page_url
+            logger.info(f"No existing page found for paper {paper_id}. Proceeding to fetch and summarize.")
 
         # Fetch paper from storage or arXiv (stores if fetched from arXiv)
         paper = self.processor.fetch_and_store_paper(paper_id, self.arxiv_fetcher)
