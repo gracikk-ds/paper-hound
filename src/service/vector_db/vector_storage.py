@@ -2,7 +2,9 @@
 
 import itertools
 import uuid
+from collections import defaultdict
 from collections.abc import Iterable
+from datetime import datetime
 
 from loguru import logger
 from qdrant_client import QdrantClient
@@ -373,6 +375,57 @@ class QdrantVectorStore:
             logger.error(f"Failed to count points in collection '{self.collection}': {exp}")
             return 0
         return count_result.count
+
+    def get_papers_by_month(self, num_months: int = 12) -> dict[str, int]:
+        """Get paper counts by month for the last N months.
+
+        Args:
+            num_months (int): Number of recent months to include. Default is 12.
+
+        Returns:
+            dict[str, int]: Dictionary mapping "YYYY-MM" to paper count.
+        """
+        self.ensure_collection()
+
+        # Dictionary to store counts by month
+        monthly_counts: dict[str, int] = defaultdict(int)
+
+        try:
+            # Scroll through all papers
+            offset = None
+            while True:
+                records, offset = self.client.scroll(
+                    collection_name=self.collection,
+                    limit=1000,
+                    with_payload=["published_date_ts"],
+                    with_vectors=False,
+                    offset=offset,
+                )
+
+                if not records:
+                    break
+
+                # Group papers by month
+                for rec in records:
+                    ts = rec.payload.get("published_date_ts")
+                    if ts is None:
+                        continue
+
+                    dt = datetime.fromtimestamp(ts)  # noqa: DTZ006
+                    month_key = dt.strftime("%Y-%m")
+                    monthly_counts[month_key] += 1
+
+                if offset is None:
+                    break
+
+        except Exception as exp:
+            logger.error(f"Failed to get papers by month: {exp}")
+            return {}
+
+        # Sort by month and return last num_months
+        sorted_months = sorted(monthly_counts.items(), reverse=True)[:num_months]
+        # Reverse to show oldest to newest
+        return dict(reversed(sorted_months))
 
     def get_vector(self, ids: str | list[str]) -> list[float] | list[list[float]]:
         """Get the vector(s) for the given point ID(s).
