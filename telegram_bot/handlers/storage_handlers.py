@@ -3,11 +3,13 @@
 import asyncio
 from datetime import datetime
 
+import aiofiles
 from loguru import logger
 from telegram import Update
 from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 
+from src.service.stats_chart import generate_monthly_chart
 from telegram_bot.context import bot_context
 from telegram_bot.formatters import format_stats
 
@@ -70,10 +72,27 @@ async def handle_stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     try:
         processor = bot_context.container.processor()
         loop = asyncio.get_running_loop()
+
+        # Get total count
         count = await loop.run_in_executor(None, processor.count_papers)
 
+        # Get monthly data
+        monthly_data = await loop.run_in_executor(None, lambda: processor.get_papers_by_month(12))
+
+        # Send text message with total count
         message = format_stats(count)
         await update.message.reply_text(message, parse_mode=ParseMode.MARKDOWN_V2)
+
+        # Generate and send chart if monthly data is available
+        if monthly_data:
+            chart_path = await loop.run_in_executor(None, lambda: generate_monthly_chart(monthly_data))
+            with aiofiles.open(chart_path, "rb") as photo:
+                await update.message.reply_photo(photo=await photo.read(), caption="Papers per month (last 12 months)")
+            # Clean up temp file
+            chart_path.unlink(missing_ok=True)
+        else:
+            await update.message.reply_text("No monthly data available yet.")
+
     except Exception as exp:
         logger.error(f"Error getting stats: {exp}")
         await update.message.reply_text("An error occurred. Please try again.")
