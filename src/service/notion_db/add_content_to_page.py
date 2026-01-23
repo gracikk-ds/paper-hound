@@ -483,12 +483,20 @@ class MarkdownToNotionUploader:
                 )
         return blocks, arxiv_url, published_date, title, authors
 
-    def upload_markdown_file(self, file_path: str, category: str = "Image Editing") -> str:
+    def upload_markdown_file(
+        self,
+        file_path: str,
+        category: str = "Image Editing",
+        model_name: str | None = None,
+        thinking_level: str | None = None,
+    ) -> str:
         """Read the markdown file, convert to Notion blocks, and upload as a new page.
 
         Args:
             file_path (str): Path to the markdown file.
             category (str): Category of the paper.
+            model_name (str | None): Model name used for summarization.
+            thinking_level (str | None): Thinking level used for summarization.
 
         Returns:
             str: URL of the created Notion page.
@@ -535,6 +543,12 @@ class MarkdownToNotionUploader:
                     cleaned_authors.append(a[:100])
         if cleaned_authors:
             properties["Authors"] = {"multi_select": [{"name": author} for author in cleaned_authors]}
+
+        # Add model name and thinking level if provided
+        if model_name:
+            properties["Model"] = {"select": {"name": model_name}}
+        if thinking_level:
+            properties["ThinkBudget"] = {"select": {"name": thinking_level}}
 
         data = {
             "parent": {"database_id": self.database_id},

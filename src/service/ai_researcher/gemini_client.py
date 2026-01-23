@@ -77,6 +77,8 @@ class GeminiApiClient:
         self.total_requests: int = 0
         self.inference_price: float = 0.0
         self.verbose = verbose
+        self.last_used_model: str | None = None
+        self.last_thinking_level: str | None = None
 
     def _load_project_id_from_creds(self) -> None:
         """Load the project id from the credentials.
@@ -192,6 +194,10 @@ class GeminiApiClient:
         effective_thinking = (
             ThinkingLevel(thinking_level.upper()) if thinking_level is not None else self.thinking_level
         )
+
+        # Track the last used model and thinking level
+        self.last_used_model = effective_model
+        self.last_thinking_level = thinking_level.upper() if thinking_level is not None else self.thinking_level.name
 
         # Generate the content
         response = self.client.models.generate_content(

@@ -136,7 +136,7 @@ class WorkflowService:
         # Summarize paper
         url: str | None = None
         try:
-            _, md_path_str = self.summarizer.summarize(
+            _, md_path_str, used_model, used_thinking_level = self.summarizer.summarize(
                 paper,
                 tmp_pdf_path,
                 model_name=model_name,
@@ -156,7 +156,12 @@ class WorkflowService:
             add_images_to_md(md_path_str, str(tmp_images_path), paper.model_dump())
 
             # Upload summary to notion
-            url = self.notion_uploader.upload_markdown_file(md_path_str, category=category)
+            url = self.notion_uploader.upload_markdown_file(
+                md_path_str,
+                category=category,
+                model_name=used_model,
+                thinking_level=used_thinking_level,
+            )
 
             # Cache the result
             if url:

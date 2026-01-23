@@ -33,7 +33,7 @@ class Summarizer:
         pdf_path: Path,
         model_name: str | None = None,
         thinking_level: Literal["LOW", "MEDIUM", "HIGH"] | None = None,
-    ) -> tuple[str | None, str | None]:
+    ) -> tuple[str | None, str | None, str | None, str | None]:
         """Summarize a research paper.
 
         Args:
@@ -43,7 +43,8 @@ class Summarizer:
             thinking_level (Literal["LOW", "MEDIUM", "HIGH"] | None): Optional thinking level to override.
 
         Returns:
-            tuple[str | None, str | None]: The summary text and the path to the markdown file.
+            tuple[str | None, str | None, str | None, str | None]: The summary text, path to markdown file,
+                model name used, and thinking level used.
         """
         response_text = self.llm_client(
             self.default_prompt,
@@ -56,7 +57,7 @@ class Summarizer:
         logger.info(f"Summarizer inference price: {self.llm_client.inference_price}")
 
         if response_text is None:
-            return None, None
+            return None, None, None, None
 
         file_name = f"{paper.title.replace(' ', '_').lower()}_summary.md"
         md_path = Path(self.tmp_storage_dir) / file_name
@@ -65,4 +66,4 @@ class Summarizer:
         with open(md_path, mode="w", encoding="utf-8") as file:
             file.write(response_text)
 
-        return response_text, str(md_path)
+        return response_text, str(md_path), self.llm_client.last_used_model, self.llm_client.last_thinking_level
