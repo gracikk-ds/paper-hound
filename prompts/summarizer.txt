@@ -1,4 +1,5 @@
 Summarize the research paper. Use clear language throughout.
+The report should be at least 1000 words. The main part of the report should be devoted to the "Methodology" section.
 Follow the structure and conventions below. NO other unrelated text should be added.
 
 ## 1. Motivation of the Research Paper
@@ -16,7 +17,10 @@ Answer each question in 1–3 sentences. Use this format:
 - [What is introduced] - [Why it matters / improvement over prior work]
 
 **Methodology**:
-Provide a comprehensive explanation of how the method or its components work. Write at least 4-6 sentences with sufficient technical detail to understand the full approach. Do not be vague or skip important details. Start a new paragraph for each key component.
+Provide a comprehensive explanation of how the method or its components work.
+You should provide sufficient technical details. Include the equations with explanations if it is needed to understand the full approach.
+Do not be vague or skip important details.
+Start a new paragraph for each key component.
 
 ## 3. Datasets Used / Presented
 
